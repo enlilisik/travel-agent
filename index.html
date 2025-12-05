@@ -52,8 +52,16 @@
         async function initFirebase() {
             setLogLevel('Debug');
             appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-            
+            // const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+            const firebaseConfig = {
+              apiKey: "AIzaSyCpSBocmDnNWuhDV4zRNCJzO8DV15tGzbg",
+              authDomain: "test-travel-agent-8c24c.firebaseapp.com",
+              projectId: "test-travel-agent-8c24c",
+              storageBucket: "test-travel-agent-8c24c.firebasestorage.app",
+              messagingSenderId: "614397992194",
+              appId: "1:614397992194:web:47d8f378e887cc38d4761b",
+              measurementId: "G-6SBQB59VSM"
+            };
             // Set initial status
             updateStatus('Warte auf Firebase...', 'animate-pulse bg-yellow-400', false); // Status update
 
