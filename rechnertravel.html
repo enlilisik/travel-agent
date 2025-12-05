@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reise-Planer Pro</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { 'sans': ['Inter', 'sans-serif'] },
+                    colors: {
+                        'primary': '#4F46E5', // Indigo 600
+                        'primary-dark': '#4338CA', // Indigo 700
+                        'secondary': '#8B5CF6', // Violet 500
+                        'surface': '#F8FAFC', // Slate 50
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+                        'glow': '0 0 15px rgba(79, 70, 229, 0.3)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { background-color: #F1F5F9; }
+        .trans-all { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+    </style>
+</head>
+<body class="text-slate-800 p-4 md:p-8 min-h-screen flex flex-col items-center justify-start">
+
+    <!-- ================= VIEW: DASHBOARD ================= -->
+    <div id="view-dashboard" class="w-full max-w-4xl fade-in">
+        <header class="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">
+                    Meine Reisen
+                </h1>
+                <p class="text-slate-500 font-medium mt-1">Verwalte und vergleiche deine Pläne</p>
+            </div>
+            <div class="flex gap-3">
+                 <button onclick="showComparison()" class="px-5 py-2.5 bg-white text-slate-600 border border-slate-200 hover:border-primary hover:text-primary rounded-xl font-medium shadow-sm trans-all flex items-center gap-2">
+                    <i class="ph-bold ph-chart-bar"></i> Vergleichen
+                </button>
+                <button onclick="createNewTrip()" class="px-5 py-2.5 bg-primary text-white hover:bg-primary-dark rounded-xl font-medium shadow-glow trans-all flex items-center gap-2">
+                    <i class="ph-bold ph-plus"></i> Neue Reise
+                </button>
+            </div>
+        </header>
+
+        <!-- Trip Grid -->
+        <div id="tripGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Cards injected via JS -->
+        </div>
+        
+        <div id="emptyDashboard" class="hidden flex-col items-center justify-center py-20 text-slate-400 bg-white rounded-3xl border border-dashed border-slate-300">
+            <i class="ph-duotone ph-airplane-tilt text-5xl mb-4 text-slate-300"></i>
+            <p class="text-lg font-medium">Noch keine Reisen geplant</p>
+            <button onclick="createNewTrip()" class="mt-4 text-primary font-semibold hover:underline">Erste Reise anlegen</button>
+        </div>
+    </div>
+
+
+    <!-- ================= VIEW: EDITOR (Cost Calculator) ================= -->
+    <div id="view-editor" class="w-full max-w-4xl hidden fade-in">
+        <!-- Header Section -->
+        <header class="w-full mb-6 flex flex-col gap-4">
+            <button onclick="showDashboard()" class="self-start text-sm text-slate-500 hover:text-primary flex items-center gap-1 trans-all">
+                <i class="ph-bold ph-arrow-left"></i> Zurück zur Übersicht
+            </button>
+            
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-2xl shadow-soft border border-slate-100">
+                <div class="flex-grow w-full md:w-auto">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Reise-Name</label>
+                    <input type="text" id="tripTitleInput" onchange="updateTripTitle()" class="w-full text-2xl md:text-3xl font-bold text-slate-800 bg-transparent border-b-2 border-transparent hover:border-slate-200 focus:border-primary focus:outline-none transition-colors placeholder-slate-300" placeholder="Reise Titel...">
+                </div>
+                
+                <!-- Travelers & Days Control -->
+                <div class="flex flex-col sm:flex-row gap-4">
+                    <!-- Travelers Control -->
+                    <div class="flex items-center gap-3 bg-slate-50 p-2 rounded-xl border border-slate-100">
+                        <div class="flex flex-col px-2">
+                            <span class="text-[10px] text-slate-400 font-bold uppercase">Reisende</span>
+                            <i class="ph-fill ph-users text-primary"></i>
+                        </div>
+                        <div class="flex items-center bg-white rounded-lg shadow-sm">
+                            <button onclick="changeTravelers(-1)" class="w-8 h-8 text-slate-400 hover:text-primary trans-all"><i class="ph-bold ph-minus"></i></button>
+                            <input type="number" id="travelerCount" value="1" min="1" class="w-10 text-center font-bold outline-none text-slate-700" onchange="recalculateEditor()">
+                            <button onclick="changeTravelers(1)" class="w-8 h-8 text-primary hover:bg-slate-50 trans-all"><i class="ph-bold ph-plus"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Days Control -->
+                    <div class="flex items-center gap-3 bg-slate-50 p-2 rounded-xl border border-slate-100">
+                        <div class="flex flex-col px-2">
+                            <span class="text-[10px] text-slate-400 font-bold uppercase">Tage</span>
+                            <i class="ph-fill ph-calendar text-secondary"></i>
+                        </div>
+                        <div class="flex items-center bg-white rounded-lg shadow-sm">
+                            <button onclick="changeDays(-1)" class="w-8 h-8 text-slate-400 hover:text-secondary trans-all"><i class="ph-bold ph-minus"></i></button>
+                            <input type="number" id="daysCount" value="7" min="1" class="w-10 text-center font-bold outline-none text-slate-700" onchange="recalculateEditor()">
+                            <button onclick="changeDays(1)" class="w-8 h-8 text-secondary hover:bg-slate-50 trans-all"><i class="ph-bold ph-plus"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Editor Card -->
+        <main class="bg-white rounded-3xl shadow-soft border border-slate-100 overflow-hidden">
+            <!-- Input -->
+            <div class="p-6 md:p-8 border-b border-slate-100 bg-slate-50/50">
+                <h2 class="text-xl font-semibold mb-4 text-slate-700">Neue Ausgabe hinzufügen / Bearbeiten</h2>
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                    <!-- Description -->
+                    <div class="md:col-span-3 space-y-1">
+                        <label class="text-xs font-semibold text-slate-400 ml-1">Beschreibung</label>
+                        <input type="text" id="itemName" placeholder="z.B. Hotel, Flug..." class="w-full p-3 bg-white rounded-xl border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none trans-all font-medium">
+                    </div>
+                    
+                    <!-- Category -->
+                    <div class="md:col-span-3 space-y-1">
+                        <label class="text-xs font-semibold text-slate-400 ml-1">Kategorie</label>
+                        <div class="relative">
+                            <select id="itemCategory" class="w-full p-3 bg-white rounded-xl border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none appearance-none font-medium cursor-pointer">
+                                <option value="transport">✈️ Transport</option>
+                                <option value="accommodation">🛏️ Unterkunft</option>
+                                <option value="food">🍔 Essen & Trinken</option>
+                                <option value="fun">🎟️ Spaß & Action</option>
+                                <option value="misc">📦 Sonstiges</option>
+                            </select>
+                            <i class="ph-bold ph-caret-down absolute right-3 top-3.5 text-slate-400 pointer-events-none"></i>
+                        </div>
+                    </div>
+
+                    <!-- Calculation Type -->
+                    <div class="md:col-span-3 space-y-1">
+                        <label class="text-xs font-semibold text-slate-400 ml-1">Berechnung</label>
+                        <div class="relative">
+                            <select id="calculationType" class="w-full p-3 bg-white rounded-xl border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none appearance-none font-medium cursor-pointer" onchange="updateCostPlaceholder(this.value)">
+                                <option value="total">Gesamtkosten</option>
+                                <option value="daily">Kosten pro Tag</option>
+                                <option value="pp">Kosten pro Person</option>
+                                <option value="ppd">Kosten pro Tag & Person</option>
+                            </select>
+                            <i class="ph-bold ph-caret-down absolute right-3 top-3.5 text-slate-400 pointer-events-none"></i>
+                        </div>
+                    </div>
+                    
+                    <!-- Cost -->
+                    <div class="md:col-span-3 space-y-1">
+                        <label class="text-xs font-semibold text-slate-400 ml-1">Preis (€)</label>
+                        <input type="number" id="itemCost" placeholder="Gesamtbetrag" class="w-full p-3 text-right bg-white rounded-xl border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none font-bold">
+                    </div>
+
+                    <!-- Action Button Row -->
+                    <div class="md:col-span-12 flex gap-3">
+                        <button onclick="addExpense()" id="addExpenseButton" class="w-full md:w-auto px-6 py-3 rounded-xl bg-primary text-white hover:bg-primary-dark shadow-lg hover:shadow-glow trans-all flex items-center justify-center flex-shrink-0 font-semibold">
+                            <i class="ph-bold ph-plus text-xl mr-2"></i> Hinzufügen
+                        </button>
+                        <button onclick="cancelEditing()" id="cancelEditButton" class="hidden w-full md:w-auto px-6 py-3 rounded-xl bg-slate-200 text-slate-700 hover:bg-slate-300 trans-all flex items-center justify-center flex-shrink-0 font-semibold">
+                            <i class="ph-bold ph-x text-xl mr-2"></i> Bearbeitung abbrechen
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- List -->
+            <div class="min-h-[300px] bg-white">
+                <div id="editorEmptyState" class="hidden flex-col items-center justify-center py-16 text-slate-400">
+                    <p>Noch keine Ausgaben</p>
+                </div>
+                <ul id="expenseList" class="divide-y divide-slate-100 max-h-[400px] overflow-y-auto"></ul>
+            </div>
+
+            <!-- Footer Stats -->
+            <div class="bg-slate-900 text-white p-6 md:p-8">
+                <div class="flex justify-between items-end">
+                    <div class="flex gap-8 md:gap-12">
+                        <div>
+                            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Gesamt</p>
+                            <p id="totalCostDisplay" class="text-3xl font-bold">0,00 €</p>
+                        </div>
+                        <div class="relative pl-8 md:pl-12 border-l border-slate-700">
+                            <p class="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">Pro Person</p>
+                            <p id="perPersonDisplay" class="text-3xl font-bold text-emerald-400">0,00 €</p>
+                        </div>
+                    </div>
+                    <button onclick="deleteCurrentTrip()" class="text-rose-400 hover:text-rose-300 text-sm flex items-center gap-1">
+                        <i class="ph-bold ph-trash"></i> Löschen
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+
+    <!-- ================= VIEW: COMPARISON ================= -->
+    <div id="view-comparison" class="w-full max-w-5xl hidden fade-in">
+        <header class="mb-6">
+            <button onclick="showDashboard()" class="text-sm text-slate-500 hover:text-primary flex items-center gap-1 trans-all mb-4">
+                <i class="ph-bold ph-arrow-left"></i> Zurück zur Übersicht
+            </button>
+            <h2 class="text-2xl font-bold text-slate-800">Reise-Vergleich</h2>
+            <p class="text-slate-500">Welcher Plan passt am besten ins Budget?</p>
+        </header>
+
+        <div class="overflow-x-auto pb-4">
+            <div class="inline-flex gap-4 min-w-full" id="comparisonContainer">
+                <!-- Comparison Cards injected here -->
+            </div>
+        </div>
+        
+        <div id="comparisonEmpty" class="hidden text-center text-slate-400 py-10">
+            <p>Du brauchst mindestens zwei Reisen für einen Vergleich.</p>
+        </div>
+    </div>
+
+
+    <script>
+        // --- Data & State ---
+        let trips = []; // Array of { id, title, travelers, days, expenses: [] }
+        let currentTripId = null;
+        let editingExpenseId = null; // ZUSTAND für die Bearbeitung
+
+        const categories = {
+            transport: { label: 'Transport', color: 'bg-blue-100 text-blue-700' },
+            accommodation: { label: 'Unterkunft', color: 'bg-amber-100 text-amber-700' },
+            food: { label: 'Essen', color: 'bg-emerald-100 text-emerald-700' },
+            fun: { label: 'Spaß', color: 'bg-rose-100 text-rose-700' },
+            misc: { label: 'Sonstiges', color: 'bg-slate-100 text-slate-700' }
+        };
+        
+        const calculationTypes = {
+            total: { label: 'Gesamtkosten', unit: '€ gesamt', icon: 'ph-check-circle', color: 'text-slate-500' },
+            daily: { label: 'Kosten pro Tag', unit: '€ / Tag', icon: 'ph-calendar-check', color: 'text-secondary' },
+            pp: { label: 'Kosten pro Person', unit: '€ / Person', icon: 'ph-user-check', color: 'text-primary' },
+            ppd: { label: 'Kosten pro Tag & Person', unit: '€ / Tag/Pers.', icon: 'ph-users-four', color: 'text-rose-500' } // NEU
+        };
+
+        const defaultExpenses = [
+            { id: Date.now() + 1, name: "Flüge / Bahn (pro Person)", cost: 250, category: 'transport', type: 'pp' },
+            { id: Date.now() + 2, name: "Unterkunft (Gesamtmiete)", cost: 1200, category: 'accommodation', type: 'total' },
+            { id: Date.now() + 3, name: "Verpflegung (pro Tag & Person)", cost: 45, category: 'food', type: 'ppd' }, // Geändert auf ppd
+            { id: Date.now() + 4, name: "Aktivitäten / Eintritt", cost: 500, category: 'fun', type: 'total' }
+        ];
+
+        // --- Init ---
+        window.onload = () => {
+            loadData();
+            showDashboard();
+        };
+
+        // --- Storage ---
+        function saveData() {
+            localStorage.setItem('travelTrips_v3', JSON.stringify(trips));
+        }
+
+        function loadData() {
+            const stored = localStorage.getItem('travelTrips_v3');
+            if (stored) {
+                trips = JSON.parse(stored);
+            } else {
+                // Check older versions and migrate or start fresh
+                const oldStored = localStorage.getItem('travelTrips_v2');
+                if (oldStored) {
+                     // Simple migration for old structure
+                    trips = JSON.parse(oldStored).map(t => ({
+                        ...t,
+                        days: 7, // Default days
+                        expenses: t.expenses.map(e => ({
+                            ...e,
+                            type: e.type || 'total' // Default to total if type is missing
+                        }))
+                    }));
+                    console.warn("Alte Reisedaten migriert. Neue Daten werden unter v3 gespeichert.");
+                } else {
+                    trips = [];
+                }
+            }
+        }
+
+        // --- Navigation ---
+        function hideAllViews() {
+            document.getElementById('view-dashboard').classList.add('hidden');
+            document.getElementById('view-editor').classList.add('hidden');
+            document.getElementById('view-comparison').classList.add('hidden');
+        }
+
+        function showDashboard() {
+            hideAllViews();
+            document.getElementById('view-dashboard').classList.remove('hidden');
+            renderDashboard();
+        }
+
+        function showEditor(tripId) {
+            hideAllViews();
+            currentTripId = tripId;
+            document.getElementById('view-editor').classList.remove('hidden');
+            loadTripIntoEditor();
+        }
+
+        function showComparison() {
+            if (trips.length < 2) {
+                // Custom modal/alert alternative instead of standard alert
+                console.error("Erstelle mindestens zwei Reisen, um zu vergleichen!");
+                return;
+            }
+            hideAllViews();
+            document.getElementById('view-comparison').classList.remove('hidden');
+            renderComparison();
+        }
+
+        // --- Dashboard Logic ---
+        function renderDashboard() {
+            const grid = document.getElementById('tripGrid');
+            const empty = document.getElementById('emptyDashboard');
+            grid.innerHTML = '';
+
+            if (trips.length === 0) {
+                empty.classList.replace('hidden', 'flex');
+                return;
+            }
+            empty.classList.replace('flex', 'hidden');
+
+            // Sort by newest first
+            [...trips].reverse().forEach(trip => {
+                const { total, perPerson } = calculateTripCosts(trip);
+
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-2xl p-6 shadow-soft hover:shadow-lg border border-slate-100 trans-all cursor-pointer group relative overflow-hidden';
+                card.onclick = (e) => {
+                    // Prevent click if clicking delete button
+                    if(!e.target.closest('.delete-btn')) showEditor(trip.id);
+                };
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-4">
+                        <h3 class="font-bold text-xl text-slate-800 group-hover:text-primary trans-all truncate" title="${trip.title || 'Unbenannte Reise'}">${trip.title || 'Unbenannte Reise'}</h3>
+                        <span class="text-xs font-bold px-2 py-1 bg-slate-100 text-slate-500 rounded-lg whitespace-nowrap">
+                            <i class="ph-fill ph-users"></i> ${trip.travelers} | <i class="ph-fill ph-calendar-blank"></i> ${trip.days} T.
+                        </span>
+                    </div>
+                    <div class="space-y-1 mb-6">
+                        <div class="flex justify-between items-end">
+                            <span class="text-sm text-slate-400 font-medium">Gesamt</span>
+                            <span class="text-2xl font-bold text-slate-800">${formatCurrency(total)}</span>
+                        </div>
+                        <div class="flex justify-between items-end">
+                            <span class="text-xs text-slate-400">pro Person</span>
+                            <span class="text-sm font-semibold text-emerald-600">${formatCurrency(perPerson)}</span>
+                        </div>
+                    </div>
+                    <div class="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden flex">
+                        ${getProgressBar(trip.expenses, total, trip.travelers, trip.days)}
+                    </div>
+                    
+                    <button class="delete-btn absolute top-4 right-4 text-slate-300 hover:text-rose-500 p-2 opacity-0 group-hover:opacity-100 trans-all" onclick="deleteTrip(${trip.id})">
+                        <i class="ph-bold ph-trash"></i>
+                    </button>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function createNewTrip() {
+            const newTrip = {
+                id: Date.now(),
+                title: 'Mein neuer Trip ' + (trips.length + 1),
+                travelers: 2,
+                days: 7,
+                expenses: JSON.parse(JSON.stringify(defaultExpenses)) // Deep copy defaults
+            };
+            trips.push(newTrip);
+            saveData();
+            showEditor(newTrip.id);
+        }
+
+        function deleteTrip(id) {
+            // Use window.confirm as a fallback for the instruction to avoid complex custom UI
+            if(confirm('Möchtest du diese Reise wirklich löschen?')) {
+                trips = trips.filter(t => t.id !== id);
+                saveData();
+                renderDashboard();
+            }
+        }
+
+        // --- Editor Logic ---
+        function getActiveTrip() {
+            return trips.find(t => t.id === currentTripId);
+        }
+        
+        // --- Setzt Bearbeitungsstatus und Formular zurück ---
+        function cancelEditing() {
+            editingExpenseId = null;
+            document.getElementById('itemName').value = '';
+            document.getElementById('itemCost').value = '';
+            document.getElementById('itemCategory').value = 'transport';
+            document.getElementById('calculationType').value = 'total';
+            updateCostPlaceholder('total');
+            
+            // Setzt Button auf "Hinzufügen" zurück
+            document.getElementById('addExpenseButton').innerHTML = '<i class="ph-bold ph-plus text-xl mr-2"></i> Hinzufügen';
+            document.getElementById('addExpenseButton').classList.replace('bg-emerald-500', 'bg-primary');
+            document.getElementById('cancelEditButton').classList.add('hidden');
+            
+            renderExpenseList(); // Liste neu rendern, um Markierung zu entfernen
+        }
+
+        function loadTripIntoEditor() {
+            const trip = getActiveTrip();
+            if (!trip) return showDashboard();
+
+            document.getElementById('tripTitleInput').value = trip.title;
+            document.getElementById('travelerCount').value = trip.travelers;
+            document.getElementById('daysCount').value = trip.days;
+            
+            // Stellt sicher, dass das Formular beim Laden sauber ist
+            cancelEditing(); 
+
+            renderExpenseList();
+            recalculateEditor();
+        }
+
+        function updateTripTitle() {
+            const trip = getActiveTrip();
+            if(trip) {
+                trip.title = document.getElementById('tripTitleInput').value || 'Unbenannt';
+                saveData();
+            }
+        }
+
+        function changeTravelers(delta) {
+            const trip = getActiveTrip();
+            if(!trip) return;
+            
+            let val = parseInt(document.getElementById('travelerCount').value) + delta;
+            if (val < 1) val = 1;
+            trip.travelers = val;
+            
+            document.getElementById('travelerCount').value = val;
+            saveData();
+            recalculateEditor();
+        }
+        
+        function changeDays(delta) {
+            const trip = getActiveTrip();
+            if(!trip) return;
+            
+            let val = parseInt(document.getElementById('daysCount').value) + delta;
+            if (val < 1) val = 1;
+            trip.days = val;
+            
+            document.getElementById('daysCount').value = val;
+            saveData();
+            recalculateEditor();
+        }
+
+        function updateCostPlaceholder(type) {
+            const input = document.getElementById('itemCost');
+            input.placeholder = calculationTypes[type].unit;
+        }
+
+        // --- Funktion zum Starten der Bearbeitung ---
+        function editExpense(id) {
+            const trip = getActiveTrip();
+            const expense = trip.expenses.find(e => e.id === id);
+            
+            if (!expense) return;
+
+            // 1. Bearbeitungsstatus setzen und Formular füllen
+            editingExpenseId = id;
+            document.getElementById('itemName').value = expense.name;
+            document.getElementById('itemCost').value = expense.cost;
+            document.getElementById('itemCategory').value = expense.category;
+            document.getElementById('calculationType').value = expense.type;
+            updateCostPlaceholder(expense.type);
+
+            // 2. Button auf "Speichern" ändern
+            document.getElementById('addExpenseButton').innerHTML = '<i class="ph-bold ph-floppy-disk text-xl mr-2"></i> Speichern';
+            document.getElementById('addExpenseButton').classList.replace('bg-primary', 'bg-emerald-500');
+            document.getElementById('cancelEditButton').classList.remove('hidden');
+
+            // 3. Fokus setzen und Liste neu rendern (um Markierung zu zeigen)
+            document.getElementById('itemName').focus();
+            renderExpenseList();
+        }
+
+
+        // --- addExpense verarbeitet Erstellung und Aktualisierung ---
+        function addExpense() {
+            const trip = getActiveTrip();
+            if(!trip) return;
+
+            const nameInput = document.getElementById('itemName');
+            const costInput = document.getElementById('itemCost');
+            const catInput = document.getElementById('itemCategory');
+            const typeInput = document.getElementById('calculationType');
+
+            const name = nameInput.value.trim();
+            const cost = parseFloat(costInput.value);
+            const type = typeInput.value;
+            const category = catInput.value;
+
+            if (!name || isNaN(cost) || cost < 0) {
+                 nameInput.classList.add('ring-2', 'ring-rose-500', 'bg-rose-50');
+                setTimeout(() => nameInput.classList.remove('ring-2', 'ring-rose-500', 'bg-rose-50'), 500);
+                return;
+            }
+
+            if (editingExpenseId !== null) {
+                // AKTUALISIEREN einer bestehenden Ausgabe
+                const expenseIndex = trip.expenses.findIndex(e => e.id === editingExpenseId);
+                if (expenseIndex !== -1) {
+                    trip.expenses[expenseIndex].name = name;
+                    trip.expenses[expenseIndex].cost = cost;
+                    trip.expenses[expenseIndex].category = category;
+                    trip.expenses[expenseIndex].type = type;
+                }
+            } else {
+                // ERSTELLEN einer neuen Ausgabe
+                trip.expenses.push({
+                    id: Date.now(),
+                    name: name,
+                    cost: cost,
+                    category: category,
+                    type: type
+                });
+            }
+
+            saveData();
+            cancelEditing(); // Formular und Zustand zurücksetzen
+            renderExpenseList();
+            recalculateEditor();
+        }
+
+        function removeExpense(expenseId) {
+            const trip = getActiveTrip();
+            if(!trip) return;
+            
+            trip.expenses = trip.expenses.filter(e => e.id !== expenseId);
+            saveData();
+            cancelEditing(); 
+            renderExpenseList();
+            recalculateEditor();
+        }
+
+        // --- Geändert: renderExpenseList zum Anklicken für die Bearbeitung und PPD Anzeige ---
+        function renderExpenseList() {
+            const trip = getActiveTrip();
+            const listEl = document.getElementById('expenseList');
+            const emptyEl = document.getElementById('editorEmptyState');
+
+            listEl.innerHTML = '';
+            
+            if (!trip.expenses.length) {
+                emptyEl.classList.remove('hidden');
+                emptyEl.classList.add('flex');
+            } else {
+                emptyEl.classList.add('hidden');
+                emptyEl.classList.remove('flex');
+
+                [...trip.expenses].reverse().forEach(e => {
+                    const catData = categories[e.category];
+                    const typeData = calculationTypes[e.type];
+                    const { finalCost } = calculateExpenseCost(e, trip.travelers, trip.days);
+
+                    // NEU: Berechnung der Kosten pro Person pro Tag (PPD)
+                    const totalFactor = trip.travelers * trip.days;
+                    const ppdCost = totalFactor > 0 ? finalCost / totalFactor : 0;
+                    
+                    const isEditing = editingExpenseId === e.id;
+                    
+                    const li = document.createElement('li');
+                    li.className = `flex items-center justify-between p-4 ${isEditing ? 'bg-indigo-50 border-l-4 border-primary shadow-inner' : 'bg-white hover:bg-slate-50'} group transition-all cursor-pointer`;
+                    li.onclick = () => editExpense(e.id); // Klick zum Bearbeiten
+
+                    li.innerHTML = `
+                        <div class="flex items-center gap-4 w-4/5">
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center ${catData.color}">
+                                <i class="ph-bold ${getIcon(e.category)}"></i>
+                            </div>
+                            <div class="flex flex-col flex-grow truncate">
+                                <p class="font-semibold text-slate-800 truncate" title="${e.name}">${e.name}</p>
+                                <div class="flex items-center text-xs text-slate-400 gap-2 font-medium">
+                                    <span>${catData.label}</span>
+                                    <span class="text-xs ${typeData.color} font-bold flex items-center gap-1">
+                                        <i class="ph-fill ${typeData.icon} text-sm"></i>
+                                        ${e.cost.toFixed(2)} ${typeData.unit.replace('€', '')}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <div class="flex flex-col items-end min-w-[100px]">
+                                <span class="font-bold text-slate-800 text-right">${formatCurrency(finalCost)}</span>
+                                <span class="text-[10px] font-medium text-slate-500 mt-0.5" title="Kosten pro Person pro Tag">
+                                    ${formatCurrency(ppdCost)} p.P.p.T.
+                                </span>
+                            </div>
+                            <button onclick="event.stopPropagation(); removeExpense(${e.id});" class="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 trans-all p-1">
+                                <i class="ph-bold ph-trash"></i>
+                            </button>
+                        </div>
+                    `;
+                    listEl.appendChild(li);
+                });
+            }
+        }
+
+        function recalculateEditor() {
+            const trip = getActiveTrip();
+            if(!trip) return;
+
+            const { total, perPerson } = calculateTripCosts(trip);
+
+            document.getElementById('totalCostDisplay').innerText = formatCurrency(total);
+            document.getElementById('perPersonDisplay').innerText = formatCurrency(perPerson);
+        }
+
+        // --- Core Calculation Logic ---
+        function calculateExpenseCost(expense, travelers, days) {
+            let baseCost = expense.cost;
+            let finalCost = baseCost;
+
+            if (expense.type === 'daily') {
+                // Cost per day * Days
+                finalCost = baseCost * days; 
+            } else if (expense.type === 'pp') {
+                // Cost per person * Travelers
+                finalCost = baseCost * travelers; 
+            } else if (expense.type === 'ppd') { // NEU: Cost per Day & Person
+                // Cost per day/person * Days * Travelers
+                finalCost = baseCost * days * travelers;
+            }
+            // If expense.type === 'total', finalCost remains baseCost
+
+            return { finalCost, baseCost };
+        }
+
+        function calculateTripCosts(trip) {
+            if (!trip || !trip.expenses) return { total: 0, perPerson: 0 };
+            
+            const total = trip.expenses.reduce((sum, e) => {
+                const { finalCost } = calculateExpenseCost(e, trip.travelers, trip.days);
+                return sum + finalCost;
+            }, 0);
+
+            const perPerson = total / (trip.travelers || 1);
+            return { total, perPerson };
+        }
+
+
+        // --- Comparison Logic ---
+        function renderComparison() {
+            const container = document.getElementById('comparisonContainer');
+            container.innerHTML = '';
+
+            if (trips.length < 2) {
+                document.getElementById('comparisonEmpty').classList.replace('hidden', 'block');
+                return;
+            }
+            document.getElementById('comparisonEmpty').classList.replace('block', 'hidden');
+
+
+            trips.forEach(trip => {
+                const { total, perPerson } = calculateTripCosts(trip);
+
+                // Calculate category totals
+                let catTotals = { transport: 0, accommodation: 0, food: 0, fun: 0, misc: 0 };
+                trip.expenses.forEach(e => {
+                     const { finalCost } = calculateExpenseCost(e, trip.travelers, trip.days);
+                    if(catTotals[e.category] !== undefined) catTotals[e.category] += finalCost;
+                });
+
+                const div = document.createElement('div');
+                div.className = 'w-72 md:w-80 flex-shrink-0 bg-white rounded-2xl shadow-soft border border-slate-100 overflow-hidden flex flex-col';
+                div.innerHTML = `
+                    <div class="p-6 bg-slate-50 border-b border-slate-100">
+                        <h3 class="font-bold text-lg text-slate-800 mb-1 truncate" title="${trip.title}">${trip.title}</h3>
+                        <p class="text-xs text-slate-500 mb-4">${trip.travelers} Reisende | ${trip.days} Tage</p>
+                        <div class="text-3xl font-bold text-primary mb-1">${formatCurrency(total)}</div>
+                        <div class="text-sm font-medium text-emerald-600">p.P. ${formatCurrency(perPerson)}</div>
+                    </div>
+                    <div class="p-6 flex-grow space-y-4">
+                        ${renderComparisonRow('Transport', catTotals.transport, 'bg-blue-100 text-blue-700')}
+                        ${renderComparisonRow('Unterkunft', catTotals.accommodation, 'bg-amber-100 text-amber-700')}
+                        ${renderComparisonRow('Essen', catTotals.food, 'bg-emerald-100 text-emerald-700')}
+                        ${renderComparisonRow('Spaß', catTotals.fun, 'bg-rose-100 text-rose-700')}
+                        ${renderComparisonRow('Sonstiges', catTotals.misc, 'bg-slate-100 text-slate-700')}
+                    </div>
+                    <div class="p-4 border-t border-slate-100 bg-slate-50">
+                        <button onclick="showEditor(${trip.id})" class="w-full py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-primary hover:border-primary trans-all text-sm font-medium">
+                            Bearbeiten
+                        </button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function renderComparisonRow(label, amount, colorClass) {
+            if(amount === 0) return `<div class="flex justify-between text-sm opacity-30"><span class="text-slate-500">${label}</span><span>-</span></div>`;
+            return `
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-slate-500">${label}</span>
+                    <span class="font-bold px-2 py-0.5 rounded-md ${colorClass}">${formatCurrency(amount)}</span>
+                </div>
+            `;
+        }
+
+
+        // --- Helpers ---
+        function formatCurrency(num) {
+            return num.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+        }
+
+        function getIcon(cat) {
+            const map = {
+                transport: 'ph-airplane-tilt',
+                accommodation: 'ph-bed',
+                food: 'ph-hamburger',
+                fun: 'ph-ticket',
+                misc: 'ph-cube'
+            };
+            return map[cat] || 'ph-circle';
+        }
+
+        function getProgressBar(expenses, total, travelers, days) {
+            if (total === 0) return '';
+            
+            // Group by category, using the calculated final cost
+            let catTotals = { transport: 0, accommodation: 0, food: 0, fun: 0, misc: 0 };
+            expenses.forEach(e => {
+                 const { finalCost } = calculateExpenseCost(e, travelers, days);
+                if(catTotals[e.category] !== undefined) catTotals[e.category] += finalCost;
+            });
+
+            // Map keys to tailwind bg colors matching our theme
+            const colors = {
+                transport: 'bg-blue-400',
+                accommodation: 'bg-amber-400',
+                food: 'bg-emerald-400',
+                fun: 'bg-rose-400',
+                misc: 'bg-slate-400'
+            };
+
+            let html = '';
+            for (const [cat, amount] of Object.entries(catTotals)) {
+                if (amount > 0) {
+                    const pct = (amount / total) * 100;
+                    html += `<div style="width: ${pct}%" class="${colors[cat]} h-full" title="${categories[cat].label}: ${formatCurrency(amount)}"></div>`;
+                }
+            }
+            return html;
+        }
+        
+        // Handle Enter Keys in Editor
+        document.addEventListener('keypress', function (e) {
+            if(e.key === 'Enter' && !document.getElementById('view-editor').classList.contains('hidden')) {
+                if(document.activeElement.id === 'itemCost' || document.activeElement.id === 'itemName') {
+                    addExpense();
+                }
+            }
+        });
+
+    </script>
+</body>
+</html>
