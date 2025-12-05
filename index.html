@@ -53,9 +53,13 @@
             setLogLevel('Debug');
             appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+            
+            // Set initial status
+            updateStatus('Warte auf Firebase...', 'animate-pulse bg-yellow-400');
 
             if (!firebaseConfig.apiKey) {
                 console.error("Firebase configuration is missing. Cannot initialize Firestore.");
+                updateStatus('Fehler: Config fehlt', 'bg-rose-500');
                 return;
             }
             
@@ -81,13 +85,23 @@
                     userId = user.uid;
                     isFirebaseReady = true;
                     console.log(`Firebase initialized. User ID: ${userId}`);
+                    updateStatus('Verbunden', 'bg-emerald-500');
                     listenForTrips();
                 } else {
                     console.warn("User signed out or authentication failed.");
+                    updateStatus('Nicht angemeldet', 'bg-gray-500');
                 }
             });
         }
         
+        function updateStatus(message, className) {
+            const statusEl = document.getElementById('firebaseStatus');
+            if (statusEl) {
+                statusEl.textContent = message;
+                statusEl.className = `text-xs px-2 py-1 rounded-full text-white ${className}`;
+            }
+        }
+
         // --- FIRESTORE CRUD & LISTENING ---
 
         function getTripCollectionRef() {
@@ -121,6 +135,7 @@
 
             }, (error) => {
                 console.error("Error listening to trips collection:", error);
+                updateStatus('Fehler beim Laden', 'bg-rose-500');
             });
         }
         
@@ -166,6 +181,17 @@
         function renderDashboard() {
             const grid = document.getElementById('tripGrid');
             const empty = document.getElementById('emptyDashboard');
+            const loading = document.getElementById('dashboardLoading');
+            
+            // Check if trips are loaded (onSnapshot fired at least once)
+            if (!isFirebaseReady) {
+                loading.classList.remove('hidden');
+                empty.classList.add('hidden');
+                grid.innerHTML = '';
+                return;
+            }
+            loading.classList.add('hidden');
+
             grid.innerHTML = '';
 
             if (trips.length === 0) {
@@ -213,7 +239,10 @@
         }
 
         function createNewTrip() {
-            if (!isFirebaseReady) return console.error("Firebase not ready.");
+            if (!isFirebaseReady) {
+                alert("Datenbank wird noch initialisiert. Bitte warten Sie, bis der Status 'Verbunden' anzeigt.");
+                return;
+            }
 
             const newId = Date.now();
             const newTrip = {
@@ -225,7 +254,9 @@
                 availabilities: [{ name: 'Du', days: [] }]
             };
             
-            // Save to Firestore and then show editor (onSnapshot will update local array)
+            // FIX: Füge die neue Reise sofort lokal hinzu, um die Race Condition zu vermeiden.
+            trips.push(newTrip); 
+            
             saveTrip(newTrip);
             showEditor(newId);
         }
@@ -810,6 +841,10 @@
                 </h1>
                 <p class="text-slate-500 font-medium mt-1">Verwalte und vergleiche deine Pläne</p>
             </div>
+            <!-- Firebase Status Indicator NEU -->
+            <div class="flex flex-col items-end">
+                <span id="firebaseStatus" class="text-xs px-2 py-1 rounded-full text-white bg-yellow-400 animate-pulse">Warte auf Firebase...</span>
+            </div>
             <div class="flex gap-3">
                  <button onclick="showComparison()" class="px-5 py-2.5 bg-white text-slate-600 border border-slate-200 hover:border-primary hover:text-primary rounded-xl font-medium shadow-sm trans-all flex items-center gap-2">
                     <i class="ph-bold ph-chart-bar"></i> Vergleichen
@@ -825,6 +860,12 @@
             <!-- Cards injected via JS -->
         </div>
         
+        <!-- Loading State NEU -->
+        <div id="dashboardLoading" class="flex flex-col items-center justify-center py-20 text-slate-400 bg-white rounded-3xl border border-dashed border-slate-300">
+            <i class="ph-duotone ph-circles-three text-5xl mb-4 text-slate-300 animate-spin"></i>
+            <p class="text-lg font-medium">Lade Reisen von Firebase...</p>
+        </div>
+
         <div id="emptyDashboard" class="hidden flex-col items-center justify-center py-20 text-slate-400 bg-white rounded-3xl border border-dashed border-slate-300">
             <i class="ph-duotone ph-airplane-tilt text-5xl mb-4 text-slate-300"></i>
             <p class="text-lg font-medium">Noch keine Reisen geplant</p>
