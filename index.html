@@ -55,11 +55,11 @@
             const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
             
             // Set initial status
-            updateStatus('Warte auf Firebase...', 'animate-pulse bg-yellow-400');
+            updateStatus('Warte auf Firebase...', 'animate-pulse bg-yellow-400', false); // Status update
 
             if (!firebaseConfig.apiKey) {
                 console.error("Firebase configuration is missing. Cannot initialize Firestore.");
-                updateStatus('Fehler: Config fehlt', 'bg-rose-500');
+                updateStatus('Fehler: Config fehlt', 'bg-rose-500', false);
                 return;
             }
             
@@ -85,20 +85,32 @@
                     userId = user.uid;
                     isFirebaseReady = true;
                     console.log(`Firebase initialized. User ID: ${userId}`);
-                    updateStatus('Verbunden', 'bg-emerald-500');
+                    updateStatus('Verbunden', 'bg-emerald-500', true); // Status update
                     listenForTrips();
                 } else {
                     console.warn("User signed out or authentication failed.");
-                    updateStatus('Nicht angemeldet', 'bg-gray-500');
+                    updateStatus('Nicht angemeldet', 'bg-gray-500', false);
                 }
             });
         }
         
-        function updateStatus(message, className) {
+        // NEU: Update Status und Button Zustand
+        function updateStatus(message, className, ready) {
             const statusEl = document.getElementById('firebaseStatus');
+            const createBtn = document.getElementById('createNewTripButton');
+            
             if (statusEl) {
                 statusEl.textContent = message;
                 statusEl.className = `text-xs px-2 py-1 rounded-full text-white ${className}`;
+            }
+
+            if (createBtn) {
+                createBtn.disabled = !ready;
+                if (ready) {
+                    createBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                } else {
+                    createBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                }
             }
         }
 
@@ -135,7 +147,7 @@
 
             }, (error) => {
                 console.error("Error listening to trips collection:", error);
-                updateStatus('Fehler beim Laden', 'bg-rose-500');
+                updateStatus('Fehler beim Laden', 'bg-rose-500', false);
             });
         }
         
@@ -240,7 +252,8 @@
 
         function createNewTrip() {
             if (!isFirebaseReady) {
-                alert("Datenbank wird noch initialisiert. Bitte warten Sie, bis der Status 'Verbunden' anzeigt.");
+                console.warn("Datenbank noch nicht bereit.");
+                // Button ist visuell blockiert, keine alert() nötig.
                 return;
             }
 
@@ -841,7 +854,7 @@
                 </h1>
                 <p class="text-slate-500 font-medium mt-1">Verwalte und vergleiche deine Pläne</p>
             </div>
-            <!-- Firebase Status Indicator NEU -->
+            <!-- Firebase Status Indicator -->
             <div class="flex flex-col items-end">
                 <span id="firebaseStatus" class="text-xs px-2 py-1 rounded-full text-white bg-yellow-400 animate-pulse">Warte auf Firebase...</span>
             </div>
@@ -849,7 +862,7 @@
                  <button onclick="showComparison()" class="px-5 py-2.5 bg-white text-slate-600 border border-slate-200 hover:border-primary hover:text-primary rounded-xl font-medium shadow-sm trans-all flex items-center gap-2">
                     <i class="ph-bold ph-chart-bar"></i> Vergleichen
                 </button>
-                <button onclick="createNewTrip()" class="px-5 py-2.5 bg-primary text-white hover:bg-primary-dark rounded-xl font-medium shadow-glow trans-all flex items-center gap-2">
+                <button onclick="createNewTrip()" id="createNewTripButton" disabled class="px-5 py-2.5 bg-primary text-white hover:bg-primary-dark rounded-xl font-medium shadow-glow trans-all flex items-center gap-2 opacity-50 cursor-not-allowed">
                     <i class="ph-bold ph-plus"></i> Neue Reise
                 </button>
             </div>
@@ -860,7 +873,7 @@
             <!-- Cards injected via JS -->
         </div>
         
-        <!-- Loading State NEU -->
+        <!-- Loading State -->
         <div id="dashboardLoading" class="flex flex-col items-center justify-center py-20 text-slate-400 bg-white rounded-3xl border border-dashed border-slate-300">
             <i class="ph-duotone ph-circles-three text-5xl mb-4 text-slate-300 animate-spin"></i>
             <p class="text-lg font-medium">Lade Reisen von Firebase...</p>
@@ -936,7 +949,7 @@
                         <input type="text" id="itemName" placeholder="z.B. Hotel, Flug..." class="w-full p-3 bg-white rounded-xl border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none trans-all font-medium">
                     </div>
                     
-                    <!-- NEU: Link Input -->
+                    <!-- Link Input -->
                     <div class="md:col-span-3 space-y-1">
                         <label class="text-xs font-semibold text-slate-400 ml-1">Link (Optional)</label>
                         <input type="url" id="itemUrl" placeholder="Link zur Unterkunft/Aktivität" class="w-full p-3 bg-white rounded-xl border border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none trans-all font-medium">
