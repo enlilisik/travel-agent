@@ -13,111 +13,121 @@
     
     <!-- Firebase Imports (MODULES) -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // Saubere, modulare Firebase-Imports (gleiche Version für alle)
+    import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- GLOBALE FIREBASE/APP VARIABLEN ---
-        let app, auth, db, userId, appId;
-        let isFirebaseReady = false;
-        let trips = [];
-        let currentTripId = null;
-        let editingExpenseId = null;
+    // Frühe Warnung, falls legacy SDK (namespaced) geladen wurde — das führt sehr oft zum Fehler.
+    if (typeof window.firebase !== 'undefined') {
+        console.warn("Legacy (namespaced) Firebase SDK detected on window.firebase — entferne non-module <script> Tags, sonst kommt es zu 'Component auth has not been registered yet'.");
+    }
 
-        // HARDKODIERTE FIREBASE KONFIGURATION (vom Benutzer bereitgestellt)
-        const firebaseConfig = {
-            apiKey: "AIzaSyCpSBocmDnNWuhDV4zRNCJzO8DV15tGzbg",
-            authDomain: "test-travel-agent-8c24c.firebaseapp.com",
-            projectId: "test-travel-agent-8c24c",
-            storageBucket: "test-travel-agent-8c24c.firebasestorage.app",
-            messagingSenderId: "614397992194",
-            appId: "1:614397992194:web:47d8f378e887cc38d4761b",
-            measurementId: "G-6SBQB59VSM"
-        };
+    let app, auth, db, userId, appId;
+    let isFirebaseReady = false;
+    let trips = [];
+    let currentTripId = null;
+    let editingExpenseId = null;
 
+    const firebaseConfig = {
+        apiKey: "AIzaSyCpSBocmDnNWuhDV4zRNCJzO8DV15tGzbg",
+        authDomain: "test-travel-agent-8c24c.firebaseapp.com",
+        projectId: "test-travel-agent-8c24c",
+        storageBucket: "test-travel-agent-8c24c.appspot.com",
+        messagingSenderId: "614397992194",
+        appId: "1:614397992194:web:47d8f378e887cc38d4761b",
+        measurementId: "G-6SBQB59VSM"
+    };
 
-        const categories = {
-            transport: { label: 'Transport', color: 'bg-blue-100 text-blue-700' },
-            accommodation: { label: 'Unterkunft', color: 'bg-amber-100 text-amber-700' },
-            food: { label: 'Essen', color: 'bg-emerald-100 text-emerald-700' },
-            fun: { label: 'Spaß', color: 'bg-rose-100 text-rose-700' },
-            misc: { label: 'Sonstiges', color: 'bg-slate-100 text-slate-700' }
-        };
-        
-        const calculationTypes = {
-            total: { label: 'Gesamtkosten', unit: '€ gesamt', icon: 'ph-check-circle', color: 'text-slate-500' },
-            daily: { label: 'Kosten pro Tag', unit: '€ / Tag', icon: 'ph-calendar-check', color: 'text-secondary' },
-            pp: { label: 'Kosten pro Person', unit: '€ / Person', icon: 'ph-user-check', color: 'text-primary' },
-            ppd: { label: 'Kosten pro Tag & Person', unit: '€ / Tag/Pers.', icon: 'ph-users-four', color: 'text-rose-500' } 
-        };
+    // Optional: SDK Debugging
+    try {
+        setLogLevel('debug');
+    } catch (e) {
+        console.warn("setLogLevel nicht verfügbar:", e);
+    }
 
-        const defaultExpenses = [
-            { id: Date.now() + 1, name: "Flüge / Bahn (pro Person)", cost: 250, category: 'transport', type: 'pp', url: '' },
-            { id: Date.now() + 2, name: "Unterkunft (Gesamtmiete)", cost: 1200, category: 'accommodation', type: 'total', url: 'https://www.airbnb.de/s/unterkünfte' },
-            { id: Date.now() + 3, name: "Verpflegung (pro Tag & Person)", cost: 45, category: 'food', type: 'ppd', url: '' },
-            { id: Date.now() + 4, name: "Aktivitäten / Eintritt", cost: 500, category: 'fun', type: 'total', url: '' }
-        ];
+    async function initFirebase() {
+        updateStatus('Warte auf Firebase...', 'animate-pulse bg-yellow-400', false);
 
-        const AVAILABILITY_COLORS = ['bg-blue-200', 'bg-green-200', 'bg-yellow-200', 'bg-purple-200', 'bg-red-200'];
-
-        // --- FIREBASE INITIALISIERUNG ---
-        async function initFirebase() {
-            setLogLevel('Debug');
-            
-            // Wichtig: Wir nutzen die System-Variable __app_id für den Datenbankpfad, 
-            // fallback auf projectId falls __app_id nicht existiert (unwahrscheinlich in dieser Umgebung).
-            appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
-            
-            updateStatus('Warte auf Firebase...', 'animate-pulse bg-yellow-400', false);
-
-            if (!firebaseConfig.apiKey) {
-                console.error("FIREBASE FEHLER: apiKey fehlt in der Konfiguration.");
-                updateStatus('Fehler: Konfig. unvollständig (API Key)', 'bg-rose-500', false);
-                return;
-            }
-            
-            try {
-                app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
-            } catch (e) {
-                console.error("FIREBASE FEHLER: Initialisierung fehlgeschlagen:", e);
-                updateStatus('Fehler: Initialisierung (Check Konsole)', 'bg-rose-500', false);
-                return;
-            }
-
-            // Authentifizierung
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                try {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } catch (error) {
-                    console.error("FIREBASE FEHLER: Custom Token Anmeldung fehlgeschlagen:", error);
-                    try {
-                         await signInAnonymously(auth);
-                    } catch(anonError) {
-                         console.error("FIREBASE FEHLER: Anonyme Anmeldung fehlgeschlagen:", anonError);
-                         updateStatus('Fehler: Anmeldung fehlgeschlagen', 'bg-rose-500', false);
-                         return;
-                    }
-                }
-            } else {
-                await signInAnonymously(auth);
-            }
-
-            // Status-Überwachung und Listener-Start
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    userId = user.uid;
-                    isFirebaseReady = true;
-                    console.log(`Firebase initialized. User ID: ${userId}`);
-                    updateStatus('Verbunden', 'bg-emerald-500', true); 
-                    listenForTrips();
-                } else {
-                    console.warn("User signed out or authentication failed.");
-                    updateStatus('Nicht angemeldet', 'bg-gray-500', false);
-                }
-            });
+        if (!firebaseConfig.apiKey) {
+            console.error("FIREBASE FEHLER: apiKey fehlt in der Konfiguration.");
+            updateStatus('Fehler: Konfig. unvollständig (API Key)', 'bg-rose-500', false);
+            return;
         }
+
+        try {
+            app = initializeApp(firebaseConfig);
+            console.log('initializeApp OK', app.options);
+        } catch (e) {
+            console.error("FIREBASE FEHLER: initializeApp fehlgeschlagen:", e);
+            updateStatus('Fehler: Initialisierung (Check Konsole)', 'bg-rose-500', false);
+            return;
+        }
+
+        // getAuth kann werfen, wenn Auth-Komponente nicht registriert ist (z.B. wegen mixed SDKs)
+        try {
+            auth = getAuth(app);
+        } catch (e) {
+            console.error("FIREBASE FEHLER: getAuth() fehlgeschlagen — vermutlich mixed SDKs oder Versionsmismatch:", e);
+            updateStatus('Fehler: Auth nicht registriert (Siehe Konsole)', 'bg-rose-500', false);
+            return;
+        }
+
+        try {
+            db = getFirestore(app);
+        } catch (e) {
+            console.error("FIREBASE FEHLER: getFirestore() fehlgeschlagen:", e);
+            updateStatus('Fehler: Firestore init', 'bg-rose-500', false);
+            return;
+        }
+
+        // Authentifizierung: Custom Token oder anonym; immer try/catch, um uncaught promise zu vermeiden
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            try {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } catch (error) {
+                console.error("FIREBASE FEHLER: Custom Token Anmeldung fehlgeschlagen:", error);
+                try {
+                    await signInAnonymously(auth);
+                } catch (anonError) {
+                    console.error("FIREBASE FEHLER: Anonyme Anmeldung fehlgeschlagen:", anonError);
+                    updateStatus('Fehler: Anmeldung fehlgeschlagen', 'bg-rose-500', false);
+                    return;
+                }
+            }
+        } else {
+            try {
+                await signInAnonymously(auth);
+            } catch (error) {
+                console.error("FIREBASE FEHLER: signInAnonymously() fehlgeschlagen:", error);
+                updateStatus(`Fehler: Anmeldung (${error?.code || error?.message || 'unknown'})`, 'bg-rose-500', false);
+                return;
+            }
+        }
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                userId = user.uid;
+                isFirebaseReady = true;
+                console.log(`Firebase initialized. User ID: ${userId}`);
+                updateStatus('Verbunden', 'bg-emerald-500', true);
+                listenForTrips();
+            } else {
+                console.warn("User signed out or authentication failed.");
+                updateStatus('Nicht angemeldet', 'bg-gray-500', false);
+            }
+        });
+    }
+
+    window.onload = () => {
+        initFirebase();
+    };
+
+    // -----------------------------------------------------
+    // Die restlichen Funktionen (updateStatus, listenForTrips, etc.)
+    // bleiben unverändert — stelle sicher, dass keine weiteren
+    // Firebase <script> Tags irgendwo in der Datei stehen.
+    // -----------------------------------------------------
         
         function updateStatus(message, className, ready) {
             const statusEl = document.getElementById('firebaseStatus');
