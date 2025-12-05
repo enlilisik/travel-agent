@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reise-Planer Pro (Hartkodierte Config)</title>
+    <title>Reise-Planer Pro (Firebase Stabil)</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts -->
@@ -11,191 +11,782 @@
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-<!-- Firebase Imports (MODULES) -->
-<script type="module">
-    // Wichtig: setLogLevel gehört zur app-API in vielen SDK-Versionen.
-    import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    <!-- Firebase Imports (MODULES) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // --- GLOBALE FIREBASE/APP VARIABLEN ---
-    let app, auth, db, userId, appId;
-    let isFirebaseReady = false;
-    let trips = [];
-    let currentTripId = null;
-    let editingExpenseId = null;
+        // --- GLOBALE FIREBASE/APP VARIABLEN ---
+        let app, auth, db, userId, appId;
+        let isFirebaseReady = false;
+        let trips = [];
+        let currentTripId = null;
+        let editingExpenseId = null;
 
-    // HARDKODIERTE FIREBASE KONFIGURATION (vom Benutzer bereitgestellt)
-    const firebaseConfig = {
-        apiKey: "AIzaSyCpSBocmDnNWuhDV4zRNCJzO8DV15tGzbg",
-        authDomain: "test-travel-agent-8c24c.firebaseapp.com",
-        projectId: "test-travel-agent-8c24c",
-        // Häufig ist das storageBucket <project-id>.appspot.com
-        storageBucket: "test-travel-agent-8c24c.appspot.com",
-        messagingSenderId: "614397992194",
-        appId: "1:614397992194:web:47d8f378e887cc38d4761b",
-        measurementId: "G-6SBQB59VSM"
-    };
+        // HARDKODIERTE FIREBASE KONFIGURATION (vom Benutzer bereitgestellt)
+        const firebaseConfig = {
+            apiKey: "AIzaSyCpSBocmDnNWuhDV4zRNCJzO8DV15tGzbg",
+            authDomain: "test-travel-agent-8c24c.firebaseapp.com",
+            projectId: "test-travel-agent-8c24c",
+            storageBucket: "test-travel-agent-8c24c.firebasestorage.app",
+            messagingSenderId: "614397992194",
+            appId: "1:614397992194:web:47d8f378e887cc38d4761b",
+            measurementId: "G-6SBQB59VSM"
+        };
 
-    const categories = {
-        transport: { label: 'Transport', color: 'bg-blue-100 text-blue-700' },
-        accommodation: { label: 'Unterkunft', color: 'bg-amber-100 text-amber-700' },
-        food: { label: 'Essen', color: 'bg-emerald-100 text-emerald-700' },
-        fun: { label: 'Spaß', color: 'bg-rose-100 text-rose-700' },
-        misc: { label: 'Sonstiges', color: 'bg-slate-100 text-slate-700' }
-    };
-    
-    const calculationTypes = {
-        total: { label: 'Gesamtkosten', unit: '€ gesamt', icon: 'ph-check-circle', color: 'text-slate-500' },
-        daily: { label: 'Kosten pro Tag', unit: '€ / Tag', icon: 'ph-calendar-check', color: 'text-secondary' },
-        pp: { label: 'Kosten pro Person', unit: '€ / Person', icon: 'ph-user-check', color: 'text-primary' },
-        ppd: { label: 'Kosten pro Tag & Person', unit: '€ / Tag/Pers.', icon: 'ph-users-four', color: 'text-rose-500' } 
-    };
 
-    const defaultExpenses = [
-        { id: Date.now() + 1, name: "Flüge / Bahn (pro Person)", cost: 250, category: 'transport', type: 'pp', url: '' },
-        { id: Date.now() + 2, name: "Unterkunft (Gesamtmiete)", cost: 1200, category: 'accommodation', type: 'total', url: 'https://www.airbnb.de/s/unterkünfte' },
-        { id: Date.now() + 3, name: "Verpflegung (pro Tag & Person)", cost: 45, category: 'food', type: 'ppd', url: '' },
-        { id: Date.now() + 4, name: "Aktivitäten / Eintritt", cost: 500, category: 'fun', type: 'total', url: '' }
-    ];
-
-    const AVAILABILITY_COLORS = ['bg-blue-200', 'bg-green-200', 'bg-yellow-200', 'bg-purple-200', 'bg-red-200'];
-
-    // --- FIREBASE INITIALISIERUNG ---
-    async function initFirebase() {
-        // setLogLevel kann in manchen Umgebungen nicht verfügbar sein -> safe call
-        try {
-            if (typeof setLogLevel === 'function') setLogLevel('debug');
-        } catch (err) {
-            console.warn('setLogLevel not available or failed:', err);
-        }
+        const categories = {
+            transport: { label: 'Transport', color: 'bg-blue-100 text-blue-700' },
+            accommodation: { label: 'Unterkunft', color: 'bg-amber-100 text-amber-700' },
+            food: { label: 'Essen', color: 'bg-emerald-100 text-emerald-700' },
+            fun: { label: 'Spaß', color: 'bg-rose-100 text-rose-700' },
+            misc: { label: 'Sonstiges', color: 'bg-slate-100 text-slate-700' }
+        };
         
-        // Wichtig: Wir nutzen die System-Variable für den Datenbankpfad
-        appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
-        
-        updateStatus('Warte auf Firebase...', 'animate-pulse bg-yellow-400', false);
+        const calculationTypes = {
+            total: { label: 'Gesamtkosten', unit: '€ gesamt', icon: 'ph-check-circle', color: 'text-slate-500' },
+            daily: { label: 'Kosten pro Tag', unit: '€ / Tag', icon: 'ph-calendar-check', color: 'text-secondary' },
+            pp: { label: 'Kosten pro Person', unit: '€ / Person', icon: 'ph-user-check', color: 'text-primary' },
+            ppd: { label: 'Kosten pro Tag & Person', unit: '€ / Tag/Pers.', icon: 'ph-users-four', color: 'text-rose-500' } 
+        };
 
-        if (!firebaseConfig.apiKey) {
-            console.error("Firebase configuration is missing. Cannot initialize Firestore.");
-            updateStatus('Fehler: Config fehlt', 'bg-rose-500', false);
-            return;
-        }
-        
-        app = initializeApp(firebaseConfig);
-        auth = getAuth(app);
-        db = getFirestore(app);
+        const defaultExpenses = [
+            { id: Date.now() + 1, name: "Flüge / Bahn (pro Person)", cost: 250, category: 'transport', type: 'pp', url: '' },
+            { id: Date.now() + 2, name: "Unterkunft (Gesamtmiete)", cost: 1200, category: 'accommodation', type: 'total', url: 'https://www.airbnb.de/s/unterkünfte' },
+            { id: Date.now() + 3, name: "Verpflegung (pro Tag & Person)", cost: 45, category: 'food', type: 'ppd', url: '' },
+            { id: Date.now() + 4, name: "Aktivitäten / Eintritt", cost: 500, category: 'fun', type: 'total', url: '' }
+        ];
 
-        // Authentifizierung
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+        const AVAILABILITY_COLORS = ['bg-blue-200', 'bg-green-200', 'bg-yellow-200', 'bg-purple-200', 'bg-red-200'];
+
+        // --- FIREBASE INITIALISIERUNG ---
+        async function initFirebase() {
+            setLogLevel('Debug');
+            
+            // Wichtig: Wir nutzen die System-Variable __app_id für den Datenbankpfad, 
+            // fallback auf projectId falls __app_id nicht existiert (unwahrscheinlich in dieser Umgebung).
+            appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
+            
+            updateStatus('Warte auf Firebase...', 'animate-pulse bg-yellow-400', false);
+
+            if (!firebaseConfig.apiKey) {
+                console.error("FIREBASE FEHLER: apiKey fehlt in der Konfiguration.");
+                updateStatus('Fehler: Konfig. unvollständig (API Key)', 'bg-rose-500', false);
+                return;
+            }
+            
             try {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } catch (error) {
-                console.error("Custom token sign-in failed:", error);
-                try { await signInAnonymously(auth); } catch(e){ console.error("Anonymous sign-in failed:", e); updateStatus('Auth fehlgeschlagen', 'bg-rose-500', false); return; }
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+            } catch (e) {
+                console.error("FIREBASE FEHLER: Initialisierung fehlgeschlagen:", e);
+                updateStatus('Fehler: Initialisierung (Check Konsole)', 'bg-rose-500', false);
+                return;
             }
-        } else {
-            try { await signInAnonymously(auth); } catch(e){ console.error("Anonymous sign-in failed:", e); updateStatus('Auth fehlgeschlagen', 'bg-rose-500', false); return; }
-        }
 
-        // Status-Überwachung und Listener-Start
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                userId = user.uid;
-                isFirebaseReady = true;
-                console.log(`Firebase initialized. User ID: ${userId}`);
-                updateStatus('Verbunden', 'bg-emerald-500', true); 
-                listenForTrips();
+            // Authentifizierung
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                try {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } catch (error) {
+                    console.error("FIREBASE FEHLER: Custom Token Anmeldung fehlgeschlagen:", error);
+                    try {
+                         await signInAnonymously(auth);
+                    } catch(anonError) {
+                         console.error("FIREBASE FEHLER: Anonyme Anmeldung fehlgeschlagen:", anonError);
+                         updateStatus('Fehler: Anmeldung fehlgeschlagen', 'bg-rose-500', false);
+                         return;
+                    }
+                }
             } else {
-                console.warn("User signed out or authentication failed.");
-                updateStatus('Nicht angemeldet', 'bg-gray-500', false);
+                await signInAnonymously(auth);
             }
-        });
-    }
-    
-    function updateStatus(message, className, ready) {
-        const statusEl = document.getElementById('firebaseStatus');
-        const createBtn = document.getElementById('createNewTripButton');
-        
-        if (statusEl) {
-            statusEl.textContent = message;
-            statusEl.className = `text-xs px-2 py-1 rounded-full text-white ${className}`;
-        }
 
-        if (createBtn) {
-            createBtn.disabled = !ready;
-            if (ready) {
-                createBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-            } else {
-                createBtn.classList.add('opacity-50', 'cursor-not-allowed');
-            }
-        }
-    }
-
-    // --- FIRESTORE CRUD & LISTENING ---
-    function getTripCollectionRef() {
-        if (!db || !userId) return null;
-        // Privater Pfad: /artifacts/{appId}/users/{userId}/trips
-        // Verwende segmentierte Argumente für die SDK-Kompatibilität
-        return collection(db, 'artifacts', appId, 'users', userId, 'trips');
-    }
-
-    function listenForTrips() {
-        const q = getTripCollectionRef();
-        if (!q) return;
-
-        // Echtzeit-Listener
-        onSnapshot(q, (snapshot) => {
-            trips = [];
-            snapshot.forEach((docItem) => {
-                trips.push({ id: docItem.id, ...docItem.data() });
+            // Status-Überwachung und Listener-Start
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    userId = user.uid;
+                    isFirebaseReady = true;
+                    console.log(`Firebase initialized. User ID: ${userId}`);
+                    updateStatus('Verbunden', 'bg-emerald-500', true); 
+                    listenForTrips();
+                } else {
+                    console.warn("User signed out or authentication failed.");
+                    updateStatus('Nicht angemeldet', 'bg-gray-500', false);
+                }
             });
+        }
+        
+        function updateStatus(message, className, ready) {
+            const statusEl = document.getElementById('firebaseStatus');
+            const createBtn = document.getElementById('createNewTripButton');
             
-            // UI Aktualisierung
-            renderDashboard(); 
-            
-            if (!document.getElementById('view-editor').classList.contains('hidden') && currentTripId) {
-                loadTripIntoEditor(true); 
-            }
-            if (!document.getElementById('view-comparison').classList.contains('hidden')) {
-                renderComparison();
+            if (statusEl) {
+                statusEl.textContent = message;
+                statusEl.className = `text-xs px-2 py-1 rounded-full text-white ${className}`;
             }
 
-        }, (error) => {
-            console.error("Fehler beim Abrufen der Reisen:", error);
-            updateStatus('Fehler beim Laden', 'bg-rose-500', false);
+            if (createBtn) {
+                createBtn.disabled = !ready;
+                if (ready) {
+                    createBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                } else {
+                    createBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+            }
+        }
+
+        // --- FIRESTORE CRUD & LISTENING ---
+
+        function getTripCollectionRef() {
+            if (!db || !userId) return null;
+            // Privater Pfad: /artifacts/{appId}/users/{userId}/trips
+            return collection(db, `artifacts/${appId}/users/${userId}/trips`);
+        }
+
+        function listenForTrips() {
+            const q = getTripCollectionRef();
+            if (!q) return;
+
+            // Echtzeit-Listener
+            onSnapshot(q, (snapshot) => {
+                trips = [];
+                snapshot.forEach((doc) => {
+                    trips.push({ id: doc.id, ...doc.data() });
+                });
+                
+                // UI Aktualisierung
+                renderDashboard(); 
+                
+                if (!document.getElementById('view-editor').classList.contains('hidden') && currentTripId) {
+                    loadTripIntoEditor(true); 
+                }
+                if (!document.getElementById('view-comparison').classList.contains('hidden')) {
+                    renderComparison();
+                }
+
+            }, (error) => {
+                console.error("FIREBASE FEHLER: Fehler beim Abrufen der Reisen (Sicherheitsregeln?):", error);
+                updateStatus('Fehler: Firestore Abruf', 'bg-rose-500', false);
+            });
+        }
+        
+        async function saveTrip(trip) {
+            if (!isFirebaseReady) {
+                console.error("Firebase nicht bereit. Speichern nicht möglich.");
+                return;
+            }
+            try {
+                const tripRef = doc(db, `artifacts/${appId}/users/${userId}/trips`, String(trip.id));
+                await setDoc(tripRef, trip);
+            } catch (e) {
+                console.error("Fehler beim Speichern der Reise: ", e);
+            }
+        }
+
+        async function removeTripFromFirestore(id) {
+             if (!isFirebaseReady) return;
+             try {
+                const tripRef = doc(db, `artifacts/${appId}/users/${userId}/trips`, String(id));
+                await deleteDoc(tripRef);
+             } catch (e) {
+                console.error("Fehler beim Löschen der Reise: ", e);
+             }
+        }
+
+
+        // --- INIT CALL ---
+        window.onload = () => {
+            initFirebase();
+        };
+
+        // --- CORE APPLICATION LOGIK ---
+
+        function getActiveTrip() {
+            return trips.find(t => String(t.id) === String(currentTripId));
+        }
+
+        // --- DASHBOARD ---
+        function renderDashboard() {
+            const grid = document.getElementById('tripGrid');
+            const empty = document.getElementById('emptyDashboard');
+            const loading = document.getElementById('dashboardLoading');
+            
+            if (!isFirebaseReady || trips.length === 0 && loading.classList.contains('hidden')) {
+            } else if (trips.length === 0) {
+                 loading.classList.add('hidden');
+                 empty.classList.replace('hidden', 'flex');
+                 grid.innerHTML = '';
+                 return;
+            }
+            
+            loading.classList.add('hidden');
+            empty.classList.add('hidden');
+            grid.innerHTML = '';
+
+
+            [...trips].reverse().forEach(trip => {
+                const { total, perPerson } = calculateTripCosts(trip);
+
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-2xl p-6 shadow-soft hover:shadow-lg border border-slate-100 trans-all cursor-pointer group relative overflow-hidden';
+                card.onclick = (e) => {
+                    if(!e.target.closest('.delete-btn')) showEditor(trip.id);
+                };
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-4">
+                        <h3 class="font-bold text-xl text-slate-800 group-hover:text-primary trans-all truncate" title="${trip.title || 'Unbenannte Reise'}">${trip.title || 'Unbenannte Reise'}</h3>
+                        <span class="text-xs font-bold px-2 py-1 bg-slate-100 text-slate-500 rounded-lg whitespace-nowrap">
+                            <i class="ph-fill ph-users"></i> ${trip.travelers} | <i class="ph-fill ph-calendar-blank"></i> ${trip.days} T.
+                        </span>
+                    </div>
+                    <div class="space-y-1 mb-6">
+                        <div class="flex justify-between items-end">
+                            <span class="text-sm text-slate-400 font-medium">Gesamt</span>
+                            <span class="text-2xl font-bold text-slate-800">${formatCurrency(total)}</span>
+                        </div>
+                        <div class="flex justify-between items-end">
+                            <span class="text-xs text-slate-400">pro Person</span>
+                            <span class="text-sm font-semibold text-emerald-600">${formatCurrency(perPerson)}</span>
+                        </div>
+                    </div>
+                    <div class="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden flex">
+                        ${getProgressBar(trip.expenses, total, trip.travelers, trip.days)}
+                    </div>
+                    
+                    <button class="delete-btn absolute top-4 right-4 text-slate-300 hover:text-rose-500 p-2 opacity-0 group-hover:opacity-100 trans-all" onclick="deleteTrip(${trip.id})">
+                        <i class="ph-bold ph-trash"></i>
+                    </button>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function createNewTrip() {
+            if (!isFirebaseReady) {
+                console.warn("Datenbank noch nicht bereit.");
+                return;
+            }
+
+            const newId = Date.now();
+            const newTrip = {
+                id: newId,
+                title: 'Mein neuer Trip ' + (trips.length + 1),
+                travelers: 2,
+                days: 7,
+                expenses: JSON.parse(JSON.stringify(defaultExpenses)),
+                availabilities: [{ name: 'Du', days: [] }]
+            };
+            
+            trips.push(newTrip); 
+            
+            saveTrip(newTrip);
+            showEditor(newId);
+        }
+
+        function deleteTrip(id) {
+            if(confirm('Möchtest du diese Reise wirklich löschen?')) {
+                removeTripFromFirestore(id);
+                if (String(id) === String(currentTripId)) {
+                    showDashboard();
+                }
+            }
+        }
+
+        // --- EDITOR FUNKTIONEN ---
+
+        function cancelEditing() {
+            editingExpenseId = null;
+            document.getElementById('itemName').value = '';
+            document.getElementById('itemCost').value = '';
+            document.getElementById('itemUrl').value = '';
+            document.getElementById('itemCategory').value = 'transport';
+            document.getElementById('calculationType').value = 'total';
+            updateCostPlaceholder('total');
+            
+            document.getElementById('addExpenseButton').innerHTML = '<i class="ph-bold ph-plus text-xl mr-2"></i> Hinzufügen';
+            document.getElementById('addExpenseButton').classList.replace('bg-emerald-500', 'bg-primary');
+            document.getElementById('cancelEditButton').classList.add('hidden');
+            
+            renderExpenseList();
+        }
+
+        function loadTripIntoEditor(isSilentUpdate = false) {
+            const trip = getActiveTrip();
+            if (!trip) return showDashboard();
+
+            if (!isSilentUpdate) {
+                document.getElementById('tripTitleInput').value = trip.title;
+                document.getElementById('travelerCount').value = trip.travelers;
+                document.getElementById('daysCount').value = trip.days;
+            }
+            
+            document.getElementById('daysCount').onchange = () => {
+                const newDays = parseInt(document.getElementById('daysCount').value) || 1;
+                trip.days = newDays;
+                
+                trip.availabilities.forEach(p => {
+                    p.days = p.days.filter(d => d < newDays);
+                });
+
+                saveTrip(trip); 
+                recalculateEditor();
+            };
+
+            cancelEditing(); 
+            renderExpenseList();
+            recalculateEditor();
+        }
+
+        function updateTripTitle() {
+            const trip = getActiveTrip();
+            if(trip) {
+                trip.title = document.getElementById('tripTitleInput').value || 'Unbenannt';
+                saveTrip(trip);
+            }
+        }
+
+        function changeTravelers(delta) {
+            const trip = getActiveTrip();
+            if(!trip) return;
+            
+            let val = parseInt(document.getElementById('travelerCount').value) + delta;
+            if (val < 1) val = 1;
+            trip.travelers = val;
+            
+            document.getElementById('travelerCount').value = val;
+            saveTrip(trip);
+            recalculateEditor();
+        }
+        
+        function changeDays(delta) {
+            const trip = getActiveTrip();
+            if(!trip) return;
+            
+            let val = parseInt(document.getElementById('daysCount').value) + delta;
+            if (val < 1) val = 1;
+            trip.days = val;
+            
+            document.getElementById('daysCount').value = val;
+            saveTrip(trip);
+            recalculateEditor();
+        }
+
+        function updateCostPlaceholder(type) {
+            const input = document.getElementById('itemCost');
+            input.placeholder = calculationTypes[type].unit;
+        }
+
+        function editExpense(id) {
+            const trip = getActiveTrip();
+            const expense = trip.expenses.find(e => e.id === id);
+            
+            if (!expense) return;
+
+            editingExpenseId = id;
+            document.getElementById('itemName').value = expense.name;
+            document.getElementById('itemCost').value = expense.cost;
+            document.getElementById('itemUrl').value = expense.url || '';
+            document.getElementById('itemCategory').value = expense.category;
+            document.getElementById('calculationType').value = expense.type;
+            updateCostPlaceholder(expense.type);
+
+            document.getElementById('addExpenseButton').innerHTML = '<i class="ph-bold ph-floppy-disk text-xl mr-2"></i> Speichern';
+            document.getElementById('addExpenseButton').classList.replace('bg-primary', 'bg-emerald-500');
+            document.getElementById('cancelEditButton').classList.remove('hidden');
+
+            document.getElementById('itemName').focus();
+            renderExpenseList();
+        }
+
+        function addExpense() {
+            const trip = getActiveTrip();
+            if(!trip) return;
+
+            const nameInput = document.getElementById('itemName');
+            const costInput = document.getElementById('itemCost');
+            const urlInput = document.getElementById('itemUrl');
+            const catInput = document.getElementById('itemCategory');
+            const typeInput = document.getElementById('calculationType');
+
+            const name = nameInput.value.trim();
+            const cost = parseFloat(costInput.value);
+            const url = urlInput.value.trim();
+            const type = typeInput.value;
+            const category = catInput.value;
+
+            if (!name || isNaN(cost) || cost < 0) {
+                 nameInput.classList.add('ring-2', 'ring-rose-500', 'bg-rose-50');
+                setTimeout(() => nameInput.classList.remove('ring-2', 'ring-rose-500', 'bg-rose-50'), 500);
+                return;
+            }
+
+            const expenseData = {
+                name: name, cost: cost, category: category, type: type, url: url
+            };
+
+            if (editingExpenseId !== null) {
+                const expenseIndex = trip.expenses.findIndex(e => e.id === editingExpenseId);
+                if (expenseIndex !== -1) {
+                    trip.expenses[expenseIndex] = { ...trip.expenses[expenseIndex], ...expenseData };
+                }
+            } else {
+                trip.expenses.push({ id: Date.now(), ...expenseData });
+            }
+
+            saveTrip(trip); 
+            cancelEditing(); 
+        }
+
+        function removeExpense(expenseId) {
+            const trip = getActiveTrip();
+            if(!trip) return;
+            
+            trip.expenses = trip.expenses.filter(e => e.id !== expenseId);
+            saveTrip(trip); 
+            cancelEditing(); 
+        }
+
+        function deleteCurrentTrip() {
+             if(confirm('Diese Reise löschen?')) {
+                removeTripFromFirestore(currentTripId);
+                showDashboard();
+            }
+        }
+
+        function renderExpenseList() {
+            const trip = getActiveTrip();
+            const listEl = document.getElementById('expenseList');
+            const emptyEl = document.getElementById('editorEmptyState');
+
+            listEl.innerHTML = '';
+            
+            if (!trip || !trip.expenses || !trip.expenses.length) {
+                emptyEl.classList.remove('hidden');
+                emptyEl.classList.add('flex');
+            } else {
+                emptyEl.classList.add('hidden');
+                emptyEl.classList.remove('flex');
+
+                [...trip.expenses].reverse().forEach(e => {
+                    const catData = categories[e.category];
+                    const typeData = calculationTypes[e.type];
+                    const { finalCost } = calculateExpenseCost(e, trip.travelers, trip.days);
+
+                    const totalFactor = trip.travelers * trip.days;
+                    const ppdCost = totalFactor > 0 ? finalCost / totalFactor : 0;
+                    
+                    const isEditing = editingExpenseId === e.id;
+                    
+                    const li = document.createElement('li');
+                    li.className = `flex items-center justify-between p-4 ${isEditing ? 'bg-indigo-50 border-l-4 border-primary shadow-inner' : 'bg-white hover:bg-slate-50'} group transition-all cursor-pointer`;
+                    li.onclick = () => editExpense(e.id); 
+
+                    li.innerHTML = `
+                        <div class="flex items-center gap-4 w-4/5">
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center ${catData.color}">
+                                <i class="ph-bold ${getIcon(e.category)}"></i>
+                            </div>
+                            <div class="flex flex-col flex-grow truncate">
+                                <p class="font-semibold text-slate-800 truncate" title="${e.name}">
+                                    ${e.name}
+                                    ${e.url ? `<a href="${e.url}" target="_blank" onclick="event.stopPropagation();" class="ml-1 text-primary hover:text-primary-dark">
+                                        <i class="ph-bold ph-link text-sm"></i>
+                                    </a>` : ''}
+                                </p>
+                                <div class="flex items-center text-xs text-slate-400 gap-2 font-medium">
+                                    <span>${catData.label}</span>
+                                    <span class="text-xs ${typeData.color} font-bold flex items-center gap-1">
+                                        <i class="ph-fill ${typeData.icon} text-sm"></i>
+                                        ${e.cost.toFixed(2)} ${typeData.unit.replace('€', '')}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <div class="flex flex-col items-end min-w-[100px]">
+                                <span class="font-bold text-slate-800 text-right">${formatCurrency(finalCost)}</span>
+                                <span class="text-[10px] font-medium text-slate-500 mt-0.5" title="Kosten pro Person pro Tag">
+                                    ${formatCurrency(ppdCost)} p.P.p.T.
+                                </span>
+                            </div>
+                            <button onclick="event.stopPropagation(); removeExpense(${e.id});" class="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 trans-all p-1">
+                                <i class="ph-bold ph-trash"></i>
+                            </button>
+                        </div>
+                    `;
+                    listEl.appendChild(li);
+                });
+            }
+        }
+
+        function recalculateEditor() {
+            const trip = getActiveTrip();
+            if(!trip) return;
+
+            const { total, perPerson } = calculateTripCosts(trip);
+
+            document.getElementById('totalCostDisplay').innerText = formatCurrency(total);
+            document.getElementById('perPersonDisplay').innerText = formatCurrency(perPerson);
+        }
+
+        // --- Core Calculation Logic ---
+        function calculateExpenseCost(expense, travelers, days) {
+            let baseCost = expense.cost;
+            let finalCost = baseCost;
+
+            if (expense.type === 'daily') {
+                finalCost = baseCost * days; 
+            } else if (expense.type === 'pp') {
+                finalCost = baseCost * travelers; 
+            } else if (expense.type === 'ppd') { 
+                finalCost = baseCost * days * travelers;
+            }
+            return { finalCost, baseCost };
+        }
+
+        function calculateTripCosts(trip) {
+            if (!trip || !trip.expenses) return { total: 0, perPerson: 0 };
+            
+            const total = trip.expenses.reduce((sum, e) => {
+                const { finalCost } = calculateExpenseCost(e, trip.travelers, trip.days);
+                return sum + finalCost;
+            }, 0);
+
+            const perPerson = total / (trip.travelers || 1);
+            return { total, perPerson };
+        }
+
+
+        // --- Verfügbarkeitsplaner Logik ---
+        function showAvailabilityPlanner() {
+            document.getElementById('availability-modal').classList.remove('hidden');
+            renderAvailabilityMatrix();
+        }
+
+        function hideAvailabilityPlanner() {
+            document.getElementById('availability-modal').classList.add('hidden');
+            const trip = getActiveTrip();
+            if (trip) saveTrip(trip);
+        }
+
+        function addPerson() {
+            const trip = getActiveTrip();
+            if (!trip) return;
+
+            const input = document.getElementById('newPersonName');
+            const name = input.value.trim();
+
+            if (name && !trip.availabilities.some(p => p.name === name)) {
+                trip.availabilities.push({ name: name, days: [] });
+                input.value = '';
+                renderAvailabilityMatrix();
+            }
+        }
+        
+        function removePerson(personName) {
+            const trip = getActiveTrip();
+            if (!trip) return;
+            
+            trip.availabilities = trip.availabilities.filter(p => p.name !== personName);
+            renderAvailabilityMatrix();
+        }
+
+        function toggleAvailability(personIndex, dayIndex) {
+            const trip = getActiveTrip();
+            if (!trip) return;
+
+            const person = trip.availabilities[personIndex];
+            if (!person) return;
+
+            const day = dayIndex;
+            const currentDays = person.days;
+
+            if (currentDays.includes(day)) {
+                person.days = currentDays.filter(d => d !== day);
+            } else {
+                person.days.push(day);
+                person.days.sort((a, b) => a - b);
+            }
+            renderAvailabilityMatrix();
+        }
+        
+        function renderAvailabilityMatrix() {
+            const trip = getActiveTrip();
+            if (!trip) return;
+            
+            const days = trip.days;
+            const matrixWrapper = document.getElementById('availability-matrix-wrapper');
+            matrixWrapper.innerHTML = '';
+
+            const table = document.createElement('div');
+            table.className = 'availability-matrix border-t border-l border-slate-200 text-sm';
+
+            // Kopfzeile (Tage)
+            let headerHtml = `<div class="sticky left-0 bg-white/95 backdrop-blur-sm p-2 font-bold border-b border-slate-200">Tag / Name</div>`;
+            for (let d = 0; d < days; d++) {
+                headerHtml += `<div class="p-2 font-semibold text-center border-b border-r border-slate-200 whitespace-nowrap">Tag ${d + 1}</div>`;
+            }
+            table.innerHTML = headerHtml;
+
+            // Verfügbarkeiten pro Person
+            trip.availabilities.forEach((person, pIndex) => {
+                let rowHtml = `<div class="sticky left-0 flex items-center justify-between p-2 bg-slate-50 border-r border-b border-slate-200">
+                    <span class="font-medium truncate pr-1">${person.name}</span>
+                    <button onclick="removePerson('${person.name}')" class="text-slate-400 hover:text-rose-500 flex-shrink-0">
+                        <i class="ph-bold ph-trash text-xs"></i>
+                    </button>
+                </div>`;
+                
+                for (let d = 0; d < days; d++) {
+                    const isAvailable = person.days.includes(d);
+                    const colorClass = AVAILABILITY_COLORS[pIndex % AVAILABILITY_COLORS.length];
+                    const cellClass = isAvailable ? `${colorClass} text-slate-800` : 'bg-white text-slate-300 hover:bg-slate-100';
+                    const content = isAvailable ? `<i class="ph-bold ph-check text-base"></i>` : `<i class="ph-bold ph-x text-base opacity-50"></i>`;
+                    
+                    rowHtml += `<div onclick="toggleAvailability(${pIndex}, ${d})" class="p-2 text-center border-b border-r border-slate-200 cursor-pointer ${cellClass} trans-all">${content}</div>`;
+                }
+                table.innerHTML += rowHtml;
+            });
+
+            // Zusammenfassungszeile (Overlap)
+            let overlapHtml = `<div class="sticky left-0 bg-slate-100 p-2 font-bold border-r border-b border-slate-200">Overlap</div>`;
+            for (let d = 0; d < days; d++) {
+                const availableCount = trip.availabilities.filter(p => p.days.includes(d)).length;
+                const totalPeople = trip.availabilities.length;
+                const overlapPct = totalPeople > 0 ? (availableCount / totalPeople) : 0;
+                
+                let overlapClass = 'bg-slate-100 text-slate-500';
+                if (overlapPct === 1) overlapClass = 'bg-emerald-500 text-white font-bold';
+                else if (overlapPct >= 0.5) overlapClass = 'bg-yellow-300 text-slate-800 font-medium';
+                else if (availableCount > 0) overlapClass = 'bg-red-200 text-slate-800';
+
+                overlapHtml += `<div class="p-2 text-center border-b border-r border-slate-200 ${overlapClass} trans-all">
+                    ${availableCount} / ${totalPeople}
+                </div>`;
+            }
+            table.innerHTML += overlapHtml;
+
+            matrixWrapper.appendChild(table);
+        }
+        
+
+
+        // --- Vergleichs-Logik ---
+        function renderComparison() {
+            const container = document.getElementById('comparisonContainer');
+            container.innerHTML = '';
+
+            if (trips.length < 2) {
+                document.getElementById('comparisonEmpty').classList.replace('hidden', 'block');
+                return;
+            }
+            document.getElementById('comparisonEmpty').classList.replace('block', 'hidden');
+
+
+            trips.forEach(trip => {
+                const { total, perPerson } = calculateTripCosts(trip);
+
+                let catTotals = { transport: 0, accommodation: 0, food: 0, fun: 0, misc: 0 };
+                trip.expenses.forEach(e => {
+                     const { finalCost } = calculateExpenseCost(e, trip.travelers, trip.days);
+                    if(catTotals[e.category] !== undefined) catTotals[e.category] += finalCost;
+                });
+
+                const div = document.createElement('div');
+                div.className = 'w-72 md:w-80 flex-shrink-0 bg-white rounded-2xl shadow-soft border border-slate-100 overflow-hidden flex flex-col';
+                div.innerHTML = `
+                    <div class="p-6 bg-slate-50 border-b border-slate-100">
+                        <h3 class="font-bold text-lg text-slate-800 mb-1 truncate" title="${trip.title}">${trip.title}</h3>
+                        <p class="text-xs text-slate-500 mb-4">${trip.travelers} Reisende | ${trip.days} Tage</p>
+                        <div class="text-3xl font-bold text-primary mb-1">${formatCurrency(total)}</div>
+                        <div class="text-sm font-medium text-emerald-600">p.P. ${formatCurrency(perPerson)}</div>
+                    </div>
+                    <div class="p-6 flex-grow space-y-4">
+                        ${renderComparisonRow('Transport', catTotals.transport, 'bg-blue-100 text-blue-700')}
+                        ${renderComparisonRow('Unterkunft', catTotals.accommodation, 'bg-amber-100 text-amber-700')}
+                        ${renderComparisonRow('Essen', catTotals.food, 'bg-emerald-100 text-emerald-700')}
+                        ${renderComparisonRow('Spaß', catTotals.fun, 'bg-rose-100 text-rose-700')}
+                        ${renderComparisonRow('Sonstiges', catTotals.misc, 'bg-slate-100 text-slate-700')}
+                    </div>
+                    <div class="p-4 border-t border-slate-100 bg-slate-50">
+                        <button onclick="showEditor(${trip.id})" class="w-full py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-primary hover:border-primary trans-all text-sm font-medium">
+                            Bearbeiten
+                        </button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function renderComparisonRow(label, amount, colorClass) {
+            if(amount === 0) return `<div class="flex justify-between text-sm opacity-30"><span class="text-slate-500">${label}</span><span>-</span></div>`;
+            return `
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-slate-500">${label}</span>
+                    <span class="font-bold px-2 py-0.5 rounded-md ${colorClass}">${formatCurrency(amount)}</span>
+                </div>
+            `;
+        }
+
+
+        // --- Helfer-Funktionen ---
+        function formatCurrency(num) {
+            return num.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+        }
+
+        function getIcon(cat) {
+            const map = {
+                transport: 'ph-airplane-tilt',
+                accommodation: 'ph-bed',
+                food: 'ph-hamburger',
+                fun: 'ph-ticket',
+                misc: 'ph-cube'
+            };
+            return map[cat] || 'ph-circle';
+        }
+
+        function getProgressBar(expenses, total, travelers, days) {
+            if (total === 0) return '';
+            
+            let catTotals = { transport: 0, accommodation: 0, food: 0, fun: 0, misc: 0 };
+            expenses.forEach(e => {
+                 const { finalCost } = calculateExpenseCost(e, travelers, days);
+                if(catTotals[e.category] !== undefined) catTotals[e.category] += finalCost;
+            });
+
+            const colors = {
+                transport: 'bg-blue-400',
+                accommodation: 'bg-amber-400',
+                food: 'bg-emerald-400',
+                fun: 'bg-rose-400',
+                misc: 'bg-slate-400'
+            };
+
+            let html = '';
+            for (const [cat, amount] of Object.entries(catTotals)) {
+                if (amount > 0) {
+                    const pct = (amount / total) * 100;
+                    html += `<div style="width: ${pct}%" class="${colors[cat]} h-full" title="${categories[cat].label}: ${formatCurrency(amount)}"></div>`;
+                }
+            }
+            return html;
+        }
+        
+        // Handle Enter Keys in Editor
+        document.addEventListener('keypress', function (e) {
+            if(e.key === 'Enter' && !document.getElementById('view-editor').classList.contains('hidden')) {
+                if(document.activeElement.id === 'itemCost' || document.activeElement.id === 'itemName' || document.activeElement.id === 'itemUrl') {
+                    addExpense();
+                }
+            }
         });
-    }
-    
-    async function saveTrip(trip) {
-        if (!isFirebaseReady) {
-            console.error("Firebase nicht bereit. Speichern nicht möglich.");
-            return;
-        }
-        try {
-            const tripRef = doc(db, 'artifacts', appId, 'users', userId, 'trips', String(trip.id));
-            await setDoc(tripRef, trip);
-        } catch (e) {
-            console.error("Fehler beim Speichern der Reise: ", e);
-        }
-    }
 
-    async function removeTripFromFirestore(id) {
-         if (!isFirebaseReady) return;
-         try {
-            const tripRef = doc(db, 'artifacts', appId, 'users', userId, 'trips', String(id));
-            await deleteDoc(tripRef);
-         } catch (e) {
-            console.error("Fehler beim Löschen der Reise: ", e);
-         }
-    }
-
-    // --- INIT CALL ---
-    window.onload = () => {
-        initFirebase();
-    };
-
-    // ... Rest deines Scripts (unverändert) ...
-</script>
+    </script>
+    </script>
 
     <script>
         // Leerer Skript-Tag für HTML-Teil
