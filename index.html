@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reise-Planer Pro (Firestore)</title>
+    <title>Reise-Planer Pro (Hartkodierte Config)</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts -->
@@ -17,12 +17,24 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- GLOBAL FIREBASE/APP VARIABLES ---
+        // --- GLOBALE FIREBASE/APP VARIABLEN ---
         let app, auth, db, userId, appId;
         let isFirebaseReady = false;
         let trips = [];
         let currentTripId = null;
         let editingExpenseId = null;
+
+        // HARDKODIERTE FIREBASE KONFIGURATION (vom Benutzer bereitgestellt)
+        const firebaseConfig = {
+            apiKey: "AIzaSyCpSBocmDnNWuhDV4zRNCJzO8DV15tGzbg",
+            authDomain: "test-travel-agent-8c24c.firebaseapp.com",
+            projectId: "test-travel-agent-8c24c",
+            storageBucket: "test-travel-agent-8c24c.firebasestorage.app",
+            messagingSenderId: "614397992194",
+            appId: "1:614397992194:web:47d8f378e887cc38d4761b",
+            measurementId: "G-6SBQB59VSM"
+        };
+
 
         const categories = {
             transport: { label: 'Transport', color: 'bg-blue-100 text-blue-700' },
@@ -48,14 +60,14 @@
 
         const AVAILABILITY_COLORS = ['bg-blue-200', 'bg-green-200', 'bg-yellow-200', 'bg-purple-200', 'bg-red-200'];
 
-        // --- FIREBASE INITIALIZATION ---
+        // --- FIREBASE INITIALISIERUNG ---
         async function initFirebase() {
             setLogLevel('Debug');
-            appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
             
-            // Set initial status
-            updateStatus('Warte auf Firebase...', 'animate-pulse bg-yellow-400', false); // Status update
+            // Wichtig: Wir nutzen die System-Variable für den Datenbankpfad
+            appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
+            
+            updateStatus('Warte auf Firebase...', 'animate-pulse bg-yellow-400', false);
 
             if (!firebaseConfig.apiKey) {
                 console.error("Firebase configuration is missing. Cannot initialize Firestore.");
@@ -67,7 +79,7 @@
             auth = getAuth(app);
             db = getFirestore(app);
 
-            // Authenticate (using token if available, otherwise anonymously)
+            // Authentifizierung
             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                 try {
                     await signInWithCustomToken(auth, __initial_auth_token);
@@ -79,13 +91,13 @@
                 await signInAnonymously(auth);
             }
 
-            // Listen for Auth State Change to set userId and start Firestore listener
+            // Status-Überwachung und Listener-Start
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     userId = user.uid;
                     isFirebaseReady = true;
                     console.log(`Firebase initialized. User ID: ${userId}`);
-                    updateStatus('Verbunden', 'bg-emerald-500', true); // Status update
+                    updateStatus('Verbunden', 'bg-emerald-500', true); 
                     listenForTrips();
                 } else {
                     console.warn("User signed out or authentication failed.");
@@ -94,7 +106,6 @@
             });
         }
         
-        // NEU: Update Status und Button Zustand
         function updateStatus(message, className, ready) {
             const statusEl = document.getElementById('firebaseStatus');
             const createBtn = document.getElementById('createNewTripButton');
@@ -118,7 +129,7 @@
 
         function getTripCollectionRef() {
             if (!db || !userId) return null;
-            // Private path: /artifacts/{appId}/users/{userId}/trips
+            // Privater Pfad: /artifacts/{appId}/users/{userId}/trips
             return collection(db, `artifacts/${appId}/users/${userId}/trips`);
         }
 
@@ -126,43 +137,39 @@
             const q = getTripCollectionRef();
             if (!q) return;
 
-            // Real-time listener for the user's trips
+            // Echtzeit-Listener
             onSnapshot(q, (snapshot) => {
                 trips = [];
                 snapshot.forEach((doc) => {
                     trips.push({ id: doc.id, ...doc.data() });
                 });
                 
-                // Re-render UI based on new data
+                // UI Aktualisierung
                 renderDashboard(); 
                 
-                // If the user is in the editor, update the editor view
                 if (!document.getElementById('view-editor').classList.contains('hidden') && currentTripId) {
                     loadTripIntoEditor(true); 
                 }
-                // If comparison view is open, re-render it
                 if (!document.getElementById('view-comparison').classList.contains('hidden')) {
                     renderComparison();
                 }
 
             }, (error) => {
-                console.error("Error listening to trips collection:", error);
+                console.error("Fehler beim Abrufen der Reisen:", error);
                 updateStatus('Fehler beim Laden', 'bg-rose-500', false);
             });
         }
         
         async function saveTrip(trip) {
             if (!isFirebaseReady) {
-                console.error("Firebase not ready. Cannot save data.");
+                console.error("Firebase nicht bereit. Speichern nicht möglich.");
                 return;
             }
             try {
-                // Use trip.id as the document ID
                 const tripRef = doc(db, `artifacts/${appId}/users/${userId}/trips`, String(trip.id));
-                // Firestore automatically handles creating/updating the document
                 await setDoc(tripRef, trip);
             } catch (e) {
-                console.error("Error adding/updating document: ", e);
+                console.error("Fehler beim Speichern der Reise: ", e);
             }
         }
 
@@ -171,9 +178,8 @@
              try {
                 const tripRef = doc(db, `artifacts/${appId}/users/${userId}/trips`, String(id));
                 await deleteDoc(tripRef);
-                // No need to manually update `trips` array, onSnapshot handles it.
              } catch (e) {
-                console.error("Error deleting document: ", e);
+                console.error("Fehler beim Löschen der Reise: ", e);
              }
         }
 
@@ -183,7 +189,7 @@
             initFirebase();
         };
 
-        // --- CORE APPLICATION LOGIC (Adapted to use Firestore writes) ---
+        // --- CORE APPLICATION LOGIK ---
 
         function getActiveTrip() {
             return trips.find(t => String(t.id) === String(currentTripId));
@@ -195,22 +201,18 @@
             const empty = document.getElementById('emptyDashboard');
             const loading = document.getElementById('dashboardLoading');
             
-            // Check if trips are loaded (onSnapshot fired at least once)
-            if (!isFirebaseReady) {
-                loading.classList.remove('hidden');
-                empty.classList.add('hidden');
-                grid.innerHTML = '';
-                return;
+            if (!isFirebaseReady || trips.length === 0 && loading.classList.contains('hidden')) {
+            } else if (trips.length === 0) {
+                 loading.classList.add('hidden');
+                 empty.classList.replace('hidden', 'flex');
+                 grid.innerHTML = '';
+                 return;
             }
+            
             loading.classList.add('hidden');
-
+            empty.classList.add('hidden');
             grid.innerHTML = '';
 
-            if (trips.length === 0) {
-                empty.classList.replace('hidden', 'flex');
-                return;
-            }
-            empty.classList.replace('flex', 'hidden');
 
             [...trips].reverse().forEach(trip => {
                 const { total, perPerson } = calculateTripCosts(trip);
@@ -253,7 +255,6 @@
         function createNewTrip() {
             if (!isFirebaseReady) {
                 console.warn("Datenbank noch nicht bereit.");
-                // Button ist visuell blockiert, keine alert() nötig.
                 return;
             }
 
@@ -267,7 +268,6 @@
                 availabilities: [{ name: 'Du', days: [] }]
             };
             
-            // FIX: Füge die neue Reise sofort lokal hinzu, um die Race Condition zu vermeiden.
             trips.push(newTrip); 
             
             saveTrip(newTrip);
@@ -277,14 +277,13 @@
         function deleteTrip(id) {
             if(confirm('Möchtest du diese Reise wirklich löschen?')) {
                 removeTripFromFirestore(id);
-                // UI updates via onSnapshot listener
                 if (String(id) === String(currentTripId)) {
                     showDashboard();
                 }
             }
         }
 
-        // --- EDITOR FUNCTIONS (Now trigger saveTrip) ---
+        // --- EDITOR FUNKTIONEN ---
 
         function cancelEditing() {
             editingExpenseId = null;
@@ -306,7 +305,6 @@
             const trip = getActiveTrip();
             if (!trip) return showDashboard();
 
-            // Nur Formular-Steuerungen aktualisieren, wenn nicht stumm (um unnötige DOM-Updates zu vermeiden)
             if (!isSilentUpdate) {
                 document.getElementById('tripTitleInput').value = trip.title;
                 document.getElementById('travelerCount').value = trip.travelers;
@@ -321,7 +319,7 @@
                     p.days = p.days.filter(d => d < newDays);
                 });
 
-                saveTrip(trip); // Save changes
+                saveTrip(trip); 
                 recalculateEditor();
             };
 
@@ -426,9 +424,8 @@
                 trip.expenses.push({ id: Date.now(), ...expenseData });
             }
 
-            saveTrip(trip); // Save to Firestore
+            saveTrip(trip); 
             cancelEditing(); 
-            // UI refresh handled by onSnapshot
         }
 
         function removeExpense(expenseId) {
@@ -436,9 +433,8 @@
             if(!trip) return;
             
             trip.expenses = trip.expenses.filter(e => e.id !== expenseId);
-            saveTrip(trip); // Save to Firestore
+            saveTrip(trip); 
             cancelEditing(); 
-            // UI refresh handled by onSnapshot
         }
 
         function deleteCurrentTrip() {
@@ -552,7 +548,7 @@
         }
 
 
-        // --- Availability Planner Logic ---
+        // --- Verfügbarkeitsplaner Logik ---
         function showAvailabilityPlanner() {
             document.getElementById('availability-modal').classList.remove('hidden');
             renderAvailabilityMatrix();
@@ -666,7 +662,7 @@
         
 
 
-        // --- Comparison Logic ---
+        // --- Vergleichs-Logik ---
         function renderComparison() {
             const container = document.getElementById('comparisonContainer');
             container.innerHTML = '';
@@ -724,7 +720,7 @@
         }
 
 
-        // --- Helpers ---
+        // --- Helfer-Funktionen ---
         function formatCurrency(num) {
             return num.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
         }
