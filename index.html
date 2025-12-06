@@ -13,7 +13,7 @@
     
     <!-- Firebase Imports (MODULES) -->
     <script type="module">
-        // Saubere, modulare Firebase-Imports (gleiche Version für alle)
+           // Saubere, modulare Firebase-Imports (gleiche Version für alle)
     import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -794,7 +794,19 @@
                 }
             }
         });
-
+window.createNewTrip = createNewTrip;
+window.showEditor = showEditor;
+window.showDashboard = showDashboard;
+window.showComparison = showComparison;
+window.deleteTrip = deleteTrip;
+window.addExpense = addExpense;
+window.removeExpense = removeExpense;
+window.editExpense = editExpense;
+window.showAvailabilityPlanner = showAvailabilityPlanner;
+window.hideAvailabilityPlanner = hideAvailabilityPlanner;
+window.toggleAvailability = toggleAvailability;
+window.addPerson = addPerson;
+window.removePerson = removePerson;
     </script>
     </script>
 
