@@ -807,7 +807,70 @@ window.hideAvailabilityPlanner = hideAvailabilityPlanner;
 window.toggleAvailability = toggleAvailability;
 window.addPerson = addPerson;
 window.removePerson = removePerson;
-    </script>
+
+        // 1) DEFAULT EXPENSES (einfügen BEVOR createNewTrip verwendet wird)
+const defaultExpenses = [
+    { id: Date.now() + 1, name: "Flüge / Bahn (pro Person)", cost: 250, category: 'transport', type: 'pp', url: '' },
+    { id: Date.now() + 2, name: "Unterkunft (Gesamtmiete)", cost: 1200, category: 'accommodation', type: 'total', url: '' },
+    { id: Date.now() + 3, name: "Verpflegung (pro Tag & Person)", cost: 45, category: 'food', type: 'ppd', url: '' },
+    { id: Date.now() + 4, name: "Aktivitäten / Eintritt", cost: 500, category: 'fun', type: 'total', url: '' }
+];
+        // 2) createNewTrip (ersetzt alte Implementierung)
+async function createNewTrip() {
+    if (!isFirebaseReady) {
+        updateStatus('Warte: Firebase noch nicht bereit', 'bg-yellow-400', false);
+        return;
+    }
+
+    const newId = Date.now();
+    const newTrip = {
+        id: newId,
+        title: 'Mein neuer Trip ' + (trips.length + 1),
+        travelers: 2,
+        days: 7,
+        expenses: JSON.parse(JSON.stringify(defaultExpenses)),
+        availabilities: [{ name: 'Du', days: [] }]
+    };
+
+    // Optimistisch lokal hinzufügen
+    trips.push(newTrip);
+    currentTripId = newId;
+
+    const ok = await saveTrip(newTrip);
+    if (ok) {
+        renderDashboard();
+        showEditor(newId);
+    } else {
+        // Rollback bei Fehler
+        trips = trips.filter(t => String(t.id) !== String(newId));
+        currentTripId = null;
+    }
+}
+        // 3) showEditor & showComparison (sicherstellen, dass sie definiert sind)
+function showEditor(id) {
+    const trip = trips.find(t => String(t.id) === String(id));
+    if (!trip) {
+        console.warn('Trip nicht gefunden', id);
+        return;
+    }
+    currentTripId = id;
+    viewDashboard.classList.add('hidden');
+    viewComparison.classList.add('hidden');
+    viewEditor.classList.remove('hidden');
+    loadTripIntoEditor();
+}
+
+function showComparison() {
+    viewEditor.classList.add('hidden');
+    viewDashboard.classList.add('hidden');
+    viewComparison.classList.remove('hidden');
+    renderComparison();
+}
+        // 4) Top-level Button EventListener (ersetzen der inline onclicks)
+createNewTripButton && createNewTripButton.addEventListener('click', createNewTrip);
+compareBtn && compareBtn.addEventListener('click', showComparison);
+createFirstTripBtn && createFirstTripBtn.addEventListener('click', createNewTrip);
+        
     </script>
 
     <script>
