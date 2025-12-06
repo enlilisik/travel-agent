@@ -275,28 +275,6 @@
             });
         }
 
-        function createNewTrip() {
-            if (!isFirebaseReady) {
-                console.warn("Datenbank noch nicht bereit.");
-                return;
-            }
-
-            const newId = Date.now();
-            const newTrip = {
-                id: newId,
-                title: 'Mein neuer Trip ' + (trips.length + 1),
-                travelers: 2,
-                days: 7,
-                expenses: JSON.parse(JSON.stringify(defaultExpenses)),
-                availabilities: [{ name: 'Du', days: [] }]
-            };
-            
-            trips.push(newTrip); 
-            
-            saveTrip(newTrip);
-            showEditor(newId);
-        }
-
         function deleteTrip(id) {
             if(confirm('Möchtest du diese Reise wirklich löschen?')) {
                 removeTripFromFirestore(id);
